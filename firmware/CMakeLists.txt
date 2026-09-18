@@ -8,7 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-set(CMAKE_PROJECT_NAME stm32f103_std_template)
+set(CMAKE_PROJECT_NAME embed-2011G-SimpleAutomaticResistorTester)
 project(${CMAKE_PROJECT_NAME} LANGUAGES C ASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
