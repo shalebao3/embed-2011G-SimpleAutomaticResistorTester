@@ -37,3 +37,12 @@ foreach(case init_ok init_error tick wrap delay_zero)
     add_test(NAME time_${case} COMMAND test_time ${case})
     set_tests_properties(time_${case} PROPERTIES TIMEOUT 5)
 endforeach()
+
+# ADC 单次读取的纯主机握手测试；不替代真实芯片验证。
+foreach(case read_before_init read_null read_after_init_failure read_midscale
+             read_zero read_fullscale read_immediate read_stale_eoc
+             read_timeout read_timeout_wrap read_success_wrap read_repeat
+             read_reinit_after_timeout)
+    add_test(NAME ${case} COMMAND test_modules ${case})
+    set_tests_properties(${case} PROPERTIES TIMEOUT 5)
+endforeach()

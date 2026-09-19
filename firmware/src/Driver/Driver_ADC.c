@@ -1,13 +1,20 @@
 #include "Driver_ADC.h"
 #include "Com_Time.h"
+#include <stddef.h>
 
 /* 校准超时保护值，保持原程序的 10ms，不是 ADC 硬件转换时间。 */
 #define ADC_CAL_TIMEOUT_MS 10U
 
+/* 单次读取的异常等待上限，不是每次采样固定等待 10ms。 */
+#define ADC_READ_TIMEOUT_MS 10U
+
+/* 仅表示本驱动已完成初始化，不是并发锁或硬件就绪寄存器。 */
+static FunctionalState s_adc1_ready = DISABLE;
+
 /**
  * @brief 初始化 ADC1：PA0、单通道、单次转换、软件触发。
  * @return SUCCESS：初始化完成；ERROR：校准等待超时。
- * @note 仅在启动阶段调用，调用前必须已启动 1ms SysTick，
+ * @note 在启动或显式故障恢复时调用，调用前必须已启动 1ms SysTick，
  *       且中断保持开启；不要放到中断函数中调用。
  */
 ErrorStatus Driver_ADC1_Init(void)
@@ -15,6 +22,9 @@ ErrorStatus Driver_ADC1_Init(void)
     GPIO_InitTypeDef gpio_init; /* PA0 引脚配置。 */
     ADC_InitTypeDef adc_init;   /* ADC 工作方式配置。 */
     uint32_t start_ms;          /* 当前等待阶段的起始时间。 */
+
+    /* 初始化失败或重新初始化期间，拒绝读取尚未就绪的 ADC。 */
+    s_adc1_ready = DISABLE;
 
     /* 1. 开启 GPIOA 和 ADC1 的外设时钟。 */
     RCC_APB2PeriphClockCmd(
@@ -82,5 +92,46 @@ ErrorStatus Driver_ADC1_Init(void)
         }
     }
 
+    s_adc1_ready = ENABLE;
+    return SUCCESS;
+}
+
+/**
+ * @brief 软件触发 ADC1/PA0 转换一次，轮询完成后返回原始值。
+ * @param raw 输出地址；仅成功时写入 0～4095，失败时保持原值。
+ * @return SUCCESS：取得本次转换结果；ERROR：参数、初始化状态或超时错误。
+ * @note 仅供主循环串行调用；SysTick 必须正常运行，不能在中断或关中断时调用。
+ *       不得由其他代码、DMA 或中断同时启动 ADC1 或读取其 DR。
+ *       超时会关闭 ADC 并标记不可读；重新初始化成功后才能继续测量。
+ */
+ErrorStatus Driver_ADC1_ReadRaw(uint16_t *raw)
+{
+    uint32_t start_ms; /* 本次转换的等待起点。 */
+
+    if ((raw == NULL) || (s_adc1_ready != ENABLE))
+    {
+        return ERROR;
+    }
+
+    /* 丢弃旧完成标志，确保等待的是接下来这次转换。 */
+    ADC_ClearFlag(ADC1, ADC_FLAG_EOC);
+    start_ms = Com_Time_GetMs();
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+
+    /* EOC = End Of Conversion；硬件完成后置位，不需要开启 ADC 中断。 */
+    while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET)
+    {
+        if ((uint32_t)(Com_Time_GetMs() - start_ms) >= ADC_READ_TIMEOUT_MS)
+        {
+            /* 终止异常转换，不让后续调用误取迟到的旧结果。 */
+            ADC_Cmd(ADC1, DISABLE);
+            s_adc1_ready = DISABLE;
+            ADC_ClearFlag(ADC1, ADC_FLAG_EOC);
+            return ERROR;
+        }
+    }
+
+    /* 读取规则组 DR；F103 读取 DR 时会清除 EOC。 */
+    *raw = ADC_GetConversionValue(ADC1);
     return SUCCESS;
 }

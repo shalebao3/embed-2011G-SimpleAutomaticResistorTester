@@ -40,6 +40,7 @@ extern ADC_TypeDef mock_adc1;
 #define ADC_Mode_Independent 0U
 #define ADC_ExternalTrigConv_None 0xE0000U
 #define ADC_DataAlign_Right 0U
+#define ADC_FLAG_EOC ((uint8_t)0x02U)
 #define ADC_Channel_0 0U
 #define ADC_SampleTime_239Cycles5 7U
 
@@ -62,5 +63,10 @@ void ADC_ResetCalibration(ADC_TypeDef *adc);
 FlagStatus ADC_GetResetCalibrationStatus(ADC_TypeDef *adc);
 void ADC_StartCalibration(ADC_TypeDef *adc);
 FlagStatus ADC_GetCalibrationStatus(ADC_TypeDef *adc);
+
+void ADC_ClearFlag(ADC_TypeDef *adc, uint8_t flag);
+void ADC_SoftwareStartConvCmd(ADC_TypeDef *adc, FunctionalState state);
+FlagStatus ADC_GetFlagStatus(ADC_TypeDef *adc, uint8_t flag);
+uint16_t ADC_GetConversionValue(ADC_TypeDef *adc);
 
 #endif

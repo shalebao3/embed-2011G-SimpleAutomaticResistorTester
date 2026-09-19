@@ -18,6 +18,11 @@ ADC_TypeDef mock_adc1;
 static uint32_t now_ms;
 static unsigned reset_polls, cal_polls;
 static int reset_stuck, cal_stuck;
+/* 只模拟转换握手，不声称覆盖采样电容、参考电压或真实时序。 */
+static int adc_enabled, read_stuck;
+static unsigned read_polls, ready_after = 2U, conversion_starts;
+static FlagStatus eoc;
+static uint16_t conversion_input = 2048U, data_register;
 static int events[128];
 static size_t event_count;
 
@@ -25,7 +30,7 @@ enum {
     CLOCK_LED, CLOCK_ADC, ADC_DIV6, ADC_RESET, GPIO_DEFAULTS,
     GPIO_LED, GPIO_ANALOG, LED_OFF, LED_ON, ADC_DEFAULTS, ADC_SETUP,
     ADC_CHANNEL0, ADC_ENABLE, DELAY_2MS, RESET_CAL, START_CAL,
-    ADC_DISABLE, DELAY_500MS
+    ADC_DISABLE, DELAY_500MS, EOC_CLEAR, CONVERSION_START, CONVERSION_READ
 };
 
 static void record(int event)
@@ -104,7 +109,9 @@ void ADC_RegularChannelConfig(ADC_TypeDef *adc, uint8_t channel, uint8_t rank, u
 }
 void ADC_Cmd(ADC_TypeDef *adc, FunctionalState state)
 {
-    CHECK(adc == ADC1); record(state == ENABLE ? ADC_ENABLE : ADC_DISABLE);
+    CHECK(adc == ADC1);
+    adc_enabled = state == ENABLE;
+    record(state == ENABLE ? ADC_ENABLE : ADC_DISABLE);
 }
 void ADC_ResetCalibration(ADC_TypeDef *adc) { CHECK(adc == ADC1); record(RESET_CAL); }
 FlagStatus ADC_GetResetCalibrationStatus(ADC_TypeDef *adc)
@@ -119,11 +126,120 @@ FlagStatus ADC_GetCalibrationStatus(ADC_TypeDef *adc)
     return (cal_stuck || cal_polls == 1U) ? SET : RESET;
 }
 
+void ADC_ClearFlag(ADC_TypeDef *adc, uint8_t flag)
+{
+    CHECK(adc == ADC1 && flag == ADC_FLAG_EOC);
+    eoc = RESET;
+    record(EOC_CLEAR);
+}
+void ADC_SoftwareStartConvCmd(ADC_TypeDef *adc, FunctionalState state)
+{
+    CHECK(adc == ADC1 && state == ENABLE && adc_enabled);
+    /* 上次 EOC 必须先清理；不会在 mock 中替驱动自动修复此条件。 */
+    CHECK(eoc == RESET);
+    read_polls = 0U;
+    conversion_starts++;
+    record(CONVERSION_START);
+}
+FlagStatus ADC_GetFlagStatus(ADC_TypeDef *adc, uint8_t flag)
+{
+    CHECK(adc == ADC1 && flag == ADC_FLAG_EOC && adc_enabled);
+    CHECK(conversion_starts > 0U && ++read_polls < 32U);
+    if (!read_stuck && read_polls >= ready_after) {
+        data_register = conversion_input;
+        eoc = SET;
+    }
+    return eoc;
+}
+uint16_t ADC_GetConversionValue(ADC_TypeDef *adc)
+{
+    CHECK(adc == ADC1 && adc_enabled && eoc == SET);
+    eoc = RESET;
+    record(CONVERSION_READ);
+    return data_register;
+}
+
+/* 每个 CTest 用例是独立进程，驱动的私有就绪状态也会重新初始化。 */
+static void test_read(const char *name)
+{
+    uint16_t raw = 0xA55AU; /* 哨兵值：失败不得覆盖输出对象。 */
+    if (strcmp(name, "read_before_init") == 0) {
+        CHECK(Driver_ADC1_ReadRaw(&raw) == ERROR);
+        CHECK(raw == 0xA55AU && event_count == 0U && now_ms == 0U);
+        return;
+    }
+
+    CHECK(Driver_ADC1_Init() == SUCCESS);
+    event_count = 0U;
+    if (strcmp(name, "read_null") == 0) {
+        const uint32_t before = now_ms;
+        CHECK(Driver_ADC1_ReadRaw(NULL) == ERROR);
+        CHECK(event_count == 0U && now_ms == before && adc_enabled);
+        /* 参数错误不破坏已成功初始化的状态。 */
+        CHECK(Driver_ADC1_ReadRaw(&raw) == SUCCESS && raw == 2048U);
+        return;
+    }
+    if (strcmp(name, "read_after_init_failure") == 0) {
+        reset_polls = cal_polls = 0U;
+        cal_stuck = 1;
+        CHECK(Driver_ADC1_Init() == ERROR);
+        event_count = 0U;
+        CHECK(Driver_ADC1_ReadRaw(&raw) == ERROR);
+        CHECK(raw == 0xA55AU && event_count == 0U && !adc_enabled);
+        return;
+    }
+
+    if (strstr(name, "wrap") != NULL) { now_ms = UINT32_MAX; }
+    if (strcmp(name, "read_zero") == 0) { conversion_input = 0U; }
+    if (strcmp(name, "read_fullscale") == 0) { conversion_input = 4095U; }
+    if (strcmp(name, "read_immediate") == 0) { ready_after = 1U; }
+    if (strcmp(name, "read_stale_eoc") == 0) {
+        eoc = SET; data_register = 17U; conversion_input = 3000U;
+    }
+    if (strstr(name, "timeout") != NULL) { read_stuck = 1; }
+    const uint32_t before = now_ms;
+    const ErrorStatus result = Driver_ADC1_ReadRaw(&raw);
+    if (read_stuck) {
+        const int expected[] = {EOC_CLEAR, CONVERSION_START, ADC_DISABLE, EOC_CLEAR};
+        CHECK(result == ERROR && raw == 0xA55AU);
+        CHECK(!adc_enabled && eoc == RESET && read_polls == 10U);
+        CHECK((uint32_t)(now_ms - before) == 11U);
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+        /* 超时后即使冒出一个迟到的 EOC，也不能把旧结果作为新值。 */
+        eoc = SET; data_register = 999U;
+        CHECK(Driver_ADC1_ReadRaw(&raw) == ERROR && raw == 0xA55AU);
+        CHECK(event_count == 4U && conversion_starts == 1U);
+        if (strcmp(name, "read_reinit_after_timeout") != 0) { return; }
+        reset_polls = cal_polls = 0U;
+        read_stuck = 0;
+        CHECK(Driver_ADC1_Init() == SUCCESS);
+        event_count = 0U;
+        CHECK(Driver_ADC1_ReadRaw(&raw) == SUCCESS && raw == 2048U);
+        CHECK(adc_enabled && conversion_starts == 2U);
+        return;
+    }
+
+    const int expected[] = {EOC_CLEAR, CONVERSION_START, CONVERSION_READ};
+    CHECK(result == SUCCESS && raw == conversion_input && adc_enabled);
+    CHECK(read_polls == ready_after && eoc == RESET && conversion_starts == 1U);
+    CHECK((uint32_t)(now_ms - before) == ready_after);
+    expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    if (strcmp(name, "read_repeat") == 0) {
+        event_count = 0U;
+        conversion_input = 1234U;
+        CHECK(Driver_ADC1_ReadRaw(&raw) == SUCCESS && raw == 1234U);
+        CHECK(conversion_starts == 2U && adc_enabled && eoc == RESET);
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    }
+}
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     const char *name = argv[1];
-    if (strcmp(name, "led") == 0) {
+    if (strncmp(name, "read_", 5U) == 0) {
+        test_read(name);
+    } else if (strcmp(name, "led") == 0) {
         const int expected[] = {CLOCK_LED, GPIO_DEFAULTS, GPIO_LED, LED_OFF, LED_ON, LED_OFF};
         Interface_LED_Init(); Interface_LED_Set(true); Interface_LED_Set(false);
         expect_events(expected, sizeof(expected) / sizeof(expected[0]));
