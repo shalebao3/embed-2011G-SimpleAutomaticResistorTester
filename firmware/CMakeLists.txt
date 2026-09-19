@@ -20,9 +20,6 @@ set(MCU_FLAGS
 
 set(STDPERIPH_ROOT "${CMAKE_SOURCE_DIR}/Libraries/STM32F10x_StdPeriph_Lib")
 set(STDPERIPH_DRIVER "${STDPERIPH_ROOT}/Libraries/STM32F10x_StdPeriph_Driver")
-set(CMSIS_CORE "${STDPERIPH_ROOT}/Libraries/CMSIS/CM3/CoreSupport")
-set(CMSIS_DEVICE "${STDPERIPH_ROOT}/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x")
-set(STARTUP_FILE "${CMSIS_DEVICE}/startup/TrueSTUDIO/startup_stm32f10x_md.s")
 
 if(NOT EXISTS "${STDPERIPH_DRIVER}/src/stm32f10x_gpio.c")
     message(FATAL_ERROR
@@ -31,9 +28,8 @@ if(NOT EXISTS "${STDPERIPH_DRIVER}/src/stm32f10x_gpio.c")
     )
 endif()
 
-# 在构建目录恢复配套头文件并适配旧 CMSIS 的 GNU 汇编约束。
-# 不修改第三方子模块，具体来源和修复范围见 docs/cmsis-build-fix.md。
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmsis-compat.cmake")
+# Start 统一管理启动/CMSIS 来源与兼容处理，不复制第三方源码到工作树。
+include("${CMAKE_CURRENT_SOURCE_DIR}/Start/startup.cmake")
 
 file(GLOB STDPERIPH_SOURCES CONFIGURE_DEPENDS
     "${STDPERIPH_DRIVER}/src/*.c"
@@ -44,11 +40,9 @@ add_library(stm32_stdperiph STATIC
 )
 
 target_include_directories(stm32_stdperiph PUBLIC
-    "${CMAKE_SOURCE_DIR}/Core/Inc"
+    "${CMAKE_SOURCE_DIR}/User"
     "${STDPERIPH_DRIVER}/inc"
-    "${CMSIS_CORE_INCLUDE}"
-    "${CMSIS_CORE}"
-    "${CMSIS_DEVICE}"
+    ${STM32_STARTUP_INCLUDE_DIRS}
 )
 
 target_compile_definitions(stm32_stdperiph PUBLIC
@@ -64,19 +58,17 @@ target_compile_options(stm32_stdperiph PRIVATE
 )
 
 add_executable(${CMAKE_PROJECT_NAME}
-    Core/Src/main.c
-    Core/Src/stm32f10x_it.c
+    User/main.c
+    User/stm32f10x_it.c
     App/App_ResistorTester.c
     Driver/Driver_ADC.c
     Interface/Interface_LED.c
     Common/Com_Time.c
-    "${CMSIS_CORE_SOURCE}"
-    "${CMSIS_DEVICE}/system_stm32f10x.c"
-    "${STARTUP_FILE}"
+    ${STM32_STARTUP_SOURCES}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    Core/Inc
+    User
     App
     Driver
     Interface

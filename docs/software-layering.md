@@ -2,23 +2,28 @@
 
 ## 改动范围
 
-业务代码基线为 `3a560d62d18681d53d8dc65e3baea5a19014146d`；复用现有分支中 `a949f7c737c7d1149a386caa7329d117fe0882f1` 的只读构建工作流并追加主机测试。做职责拆分时，参考 BalancingCar 的目录组织，但不复制其寄存器驱动、FreeRTOS、Keil 工程或业务代码。
+最初分层的业务代码基线为 `3a560d62d18681d53d8dc65e3baea5a19014146d`；参考 BalancingCar 的职责分工，但不复制其寄存器驱动、FreeRTOS、Keil 工程或业务代码。后续在已合入分层及 CMSIS 构建修复的 `77eac95a2273eb84c4342f3ec12c7ce39ae4cb4d` 基础上落实 `Start / User` 目录。
 
-这次不新增 ADC 读取、电阻换算、自动量程、继电器、DMA、TIM 触发或显示功能。ADC 配置、上电稳定等待 2ms、两阶段校准各 10ms 超时、错误后关闭 ADC、LED 亮灭各 500ms 均保持原实现。
+目录迁移不新增 ADC 读取、电阻换算、自动量程、继电器、DMA、TIM 触发或显示功能。ADC 配置、上电稳定等待 2ms、两阶段校准各 10ms 超时、错误后关闭 ADC、LED 亮灭各 500ms 均保持原实现。
 
 ## 文件职责
 
 | 位置 | 职责 |
 | --- | --- |
-| `firmware/Core/Src/main.c` | 更新系统时钟信息，先初始化时基，再初始化应用，循环调用应用任务；保留 Error_Handler |
+| `firmware/Start/startup.cmake` | 启动支持统一构建入口，集中选择 GNU 启动文件、系统初始化和 CMSIS 源码/头文件路径 |
+| `firmware/Start/cmsis-compat.cmake` | 已有 CMSIS V1.30 兼容处理，仅更换脚本位置，生成目录和三处修复不变 |
+| `firmware/User/main.c` | 更新系统时钟信息，先初始化时基，再初始化应用，循环调用应用任务；保留 Error_Handler |
+| `firmware/User/stm32f10x_it.c/.h` | 保留唯一的项目中断实现与声明；SysTick 只调用 Com_Time_Tick |
+| `firmware/User/stm32f10x_conf.h` | 项目级标准外设库包含和断言配置 |
 | `firmware/App/App_ResistorTester.c/.h` | 组织 LED、ADC 初始化和当前验证任务；以后放测量调度、阻值换算与换档策略 |
 | `firmware/Driver/Driver_ADC.c/.h` | ADC1/PA0 的标准库初始化和校准；以后扩展读取原始值，不处理参考电阻与量程业务 |
 | `firmware/Interface/Interface_LED.c/.h` | GPIOC 时钟、PC13 初始化及低电平有效的亮灭操作 |
 | `firmware/Common/Com_Time.c/.h` | 使用 CMSIS SysTick 的毫秒服务；此公共服务仍依赖 STM32，不是纯平台无关算法 |
-| `firmware/Core/Src/stm32f10x_it.c` | 保留唯一的中断入口；SysTick 只调用 Com_Time_Tick |
 | `tests/layering` | 独立主机回归测试，使用硬件接口替身，不进入固件编译 |
 
-同一模块的 `.c/.h` 放在一起；现有 `Core/Inc`、`Core/Src`、标准库子模块、启动代码和链接脚本的位置不变。CMake 只增加四个源文件和四个头文件搜索路径，固件编译参数不变。
+同一模块的 `.c/.h` 放在一起。原 `Core/Inc`、`Core/Src` 的五个项目文件原样迁入 `User`，不同时保留两套入口或中断文件。第三方源码仍由 `Libraries` 子模块管理；`Start` 是实际接入构建的配置和源码导航，不在工作树复制另一套内核支持。启动文件、系统初始化、链接脚本内容和位置不变。
+
+详细导航：[Start](../firmware/Start/README.md)、[User](../firmware/User/README.md)。
 
 ## 调用顺序
 
@@ -40,10 +45,10 @@ SysTick_Handler → Com_Time_Tick → 私有 s_ms_ticks
 
 ## 时间与中断约束
 
-- 计数唯一存放在 `Com_Time.c` 的 `static volatile uint32_t s_ms_ticks`，不再通过 `main.h` 暴露可写全局量。
+- 计数唯一存放在 `Com_Time.c` 的 `static volatile uint32_t s_ms_ticks`，不通过 `main.h` 暴露可写全局量。
 - `Com_Time_Init()` 只在启动阶段调用一次，使用已更新的 `SystemCoreClock`，不重置已运行的计数。
 - 超时仍使用无符号差值 `(uint32_t)(now - start)`，保留回绕处理。
-- `Com_Time_DelayMs()` 和 ADC 初始化要求 SysTick 能继续运行，不可在中断中或关闭中断时调用。此次没有把它们改为非阻塞实现，也没有增加“中断被冻结”时的第二时钟源。
+- `Com_Time_DelayMs()` 和 ADC 初始化要求 SysTick 能继续运行，不可在中断中或关闭中断时调用。没有把它们改为非阻塞实现，也没有增加“中断被冻结”时的第二时钟源。
 - 当前 `App_ResistorTester_Task()` 仍一次阻塞约 1 秒；这是等价拆分，不是测量调度已完成。后续加入采样时，再单独设计非阻塞任务节奏。
 - ADC 初始化失败向上传递 `ERROR`，最后由 main 的 `Error_Handler()` 按原策略停机。
 
@@ -60,7 +65,7 @@ for config in Debug Release; do
 done
 ```
 
-每个构建类型包含 15 个用例：ADC 参数与调用顺序、两阶段校准超时、超时跨计数回绕、应用初始化及错误传播、LED 极性与闪烁节奏、SysTick 配置成功/失败、Tick 和 ISR 转发、计数回绕以及零延时。
+每个构建类型包含 15 个用例：ADC 参数与调用顺序、两阶段校准超时、超时跨计数回绕、应用初始化及错误传播、LED 极性与闪烁节奏、SysTick 配置成功/失败、Tick 和 ISR 转发、计数回绕以及零延时。迁移后主机测试使用 `User/stm32f10x_it.c`，不是旧路径或复制品。
 
 测试没有使用会被 Release 的 `NDEBUG` 关闭的断言。`test_time.c` 在测试翻译单元中纳入真实时间模块实现，仅为设置其私有计数到回绕边界；不向生产接口增加测试专用 setter。非零延时依赖的真实中断时序仍需上板验证。
 
@@ -74,19 +79,22 @@ for config in Debug Release; do
     -DCMAKE_BUILD_TYPE="$config" \
     -DCMAKE_TOOLCHAIN_FILE=cmake/gcc-arm-none-eabi.cmake
   cmake --build "firmware/build/$config"
+  python3 tests/check_cmsis_compat.py "firmware/build/$config"
 done
 ```
 
-云端工作流先执行主机测试，再执行 ARM 固件构建，使用只读仓库权限，不烧录、不部署、不提交代码，没有定时任务。
+构建校验同时检查 `Start / User` 目录、入口/中断/系统/启动编译单元各只有一份、实际使用 GNU/TrueSTUDIO 启动文件、编译命令没有旧 Core 路径或主机测试桩。CMSIS 原文件哈希、兼容副本差异和干净子模块检查仍保留。
 
-## 已确认的既有构建阻塞
+云端工作流先执行主机测试，再执行 ARM 固件构建及构建产物检查，使用只读仓库权限，不烧录、不部署、不提交代码，没有定时任务。本次目录迁移不修改工作流触发方式。
 
-分层前的业务代码在 CI 提交 `a949f7c737c7d1149a386caa7329d117fe0882f1` 下已出现 Debug/Release 编译失败：[基线运行记录](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35435104761)。Debug 日志首先报 `core_cm3.h: No such file or directory`。固定子模块提交 `afa743577f2784e95be2d5003380fdb84a702519` 的 `Libraries/CMSIS/CM3/CoreSupport/` 只有 `core_cm3.c` 和 `core_cm3.h.old`，缺少正常文件名的 `core_cm3.h`。
+## 历史构建问题
 
-此次不重命名或修改标准库，不自动借用其他 CMSIS 版本，也不掩盖失败。主机测试通过仅说明被测模块在接口替身下满足回归用例，不能视为完整 ARM 固件构建通过。用户反馈的本地编译通过与干净检出的差异仍待核实，不能据此推断本地曾如何补文件。
+分层前的业务代码在 CI 提交 `a949f7c737c7d1149a386caa7329d117fe0882f1` 下已出现 Debug/Release 编译失败：[基线运行记录](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35435104761)。固定子模块曾因只有 `core_cm3.h.old`、没有正常文件名的 `core_cm3.h` 而失败；补全后又暴露旧 GNU 汇编输出约束问题。
+
+这些问题已由 [CMSIS 构建修复](cmsis-build-fix.md) 处理，并在合并提交 `77eac95` 的 [Actions](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35441308285) 中通过。此次只把兼容脚本移入 Start，不改处理逻辑。新迁移提交的结果以其对应 Actions 为准，不能用历史通过代替当前验收。
 
 ## 上板验收与回滚
 
-主机测试和交叉编译均不能验证真实 ADC 校准、模拟电压、电阻精度或晶振是否正常。上板时至少检查：进入主循环而不是 Error_Handler；SysTick 每次仅更新一次计数；LED 仍亮 500ms、灭 500ms；ADC1 初始化返回 SUCCESS，参数与拆分前一致。
+主机测试和交叉编译均不能验证真实 ADC 校准、模拟电压、电阻精度或晶振是否正常。上板时至少检查：进入主循环而不是 Error_Handler；SysTick 每次仅更新一次计数；LED 仍亮 500ms、灭 500ms；ADC1 初始化返回 SUCCESS，参数与迁移前一致。
 
-改动在独立分支审查，未合并 main 时可直接切回 main。合入后如需撤回，用 `git revert` 撤销对应分层提交，避免 `reset --hard` 丢弃其他工作。此次不涉及数据库、生产部署或标准库更新。
+目录迁移在独立分支审查；未合并 main 时可切回原分支。合入后如需撤回，用 `git revert` 撤销对应目录迁移提交，再重新运行 CMake 配置，避免 `reset --hard` 丢弃其他工作。此次不涉及数据库、生产部署或标准库更新。
