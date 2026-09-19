@@ -25,6 +25,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  host-tests:
+    name: Host regression tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test real modules against peripheral stubs
+        run: python3 tests/test_layers.py
+
   build:
     name: Firmware (${{ matrix.build_type }})
     runs-on: ubuntu-24.04

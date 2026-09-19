@@ -61,6 +61,10 @@ target_compile_options(stm32_stdperiph PRIVATE
 add_executable(${CMAKE_PROJECT_NAME}
     Core/Src/main.c
     Core/Src/stm32f10x_it.c
+    App/App_ResistorTester.c
+    Driver/Driver_ADC.c
+    Interface/Interface_LED.c
+    Common/Com_Time.c
     "${CMSIS_CORE}/core_cm3.c"
     "${CMSIS_DEVICE}/system_stm32f10x.c"
     "${STARTUP_FILE}"
@@ -68,6 +72,10 @@ add_executable(${CMAKE_PROJECT_NAME}
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Inc
+    App
+    Driver
+    Interface
+    Common
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
