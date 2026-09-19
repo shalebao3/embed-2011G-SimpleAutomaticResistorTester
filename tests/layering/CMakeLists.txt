@@ -16,12 +16,12 @@ add_executable(test_modules
 )
 add_executable(test_time
     test_time.c
-    "${FIRMWARE}/Core/Src/stm32f10x_it.c"
+    "${FIRMWARE}/User/stm32f10x_it.c"
 )
 foreach(target test_modules test_time)
     target_include_directories(${target} PRIVATE
         mocks "${FIRMWARE}/App" "${FIRMWARE}/Driver"
-        "${FIRMWARE}/Interface" "${FIRMWARE}/Common" "${FIRMWARE}/Core/Inc"
+        "${FIRMWARE}/Interface" "${FIRMWARE}/Common" "${FIRMWARE}/User"
     )
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)

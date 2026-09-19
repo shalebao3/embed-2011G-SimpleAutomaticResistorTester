@@ -18,7 +18,9 @@
 
 ## 实现位置与边界
 
-`firmware/cmake/cmsis-compat.cmake` 在构建目录 `cmsis-compat/` 恢复头文件，并为 GNU 生成只含上述三处约束调整的 `core_cm3.c` 副本。CMake 仅编译这一份核心源码。原文件存在时优先使用原 `core_cm3.h`；两个名字都缺失则报错。汇编语句不匹配审核版本或已知修复版本时停止，禁止对未知版本盲目替换。
+`firmware/Start/cmsis-compat.cmake` 在构建目录 `cmsis-compat/` 恢复头文件，并为 GNU 生成只含上述三处约束调整的 `core_cm3.c` 副本。CMake 仅编译这一份核心源码。原文件存在时优先使用原 `core_cm3.h`；两个名字都缺失则报错。汇编语句不匹配审核版本或已知修复版本时停止，禁止对未知版本盲目替换。
+
+脚本已由原 `firmware/cmake/` 迁入 `Start`，内容不变，通过 [Start/startup.cmake](../firmware/Start/startup.cmake) 统一接入；下面的构建生成路径保持不变。
 
 例如 Debug 输出：
 
@@ -38,10 +40,10 @@ firmware/build/Debug/cmsis-compat/
 python3 tests/check_cmsis_compat.py firmware/build/Debug
 ```
 
-新增检查验证头文件的固定 Git 哈希和逐字节一致性、核心源码差异仅限三处约束、只编译一份核心源码、子模块提交与工作区保持不变，以及 BIN/HEX/MAP 产物非空。验证失败不会被忽略。具体运行结果以对应提交的 Actions 为准。
+检查验证头文件的固定 Git 哈希和逐字节一致性、核心源码差异仅限三处约束、只编译一份核心源码、子模块提交与工作区保持不变，以及 BIN/HEX/MAP 产物非空。Start/User 迁移后还校验入口、中断、系统和 GNU 启动文件的实际编译路径与唯一性。验证失败不会被忽略。具体运行结果以对应提交的 Actions 为准。
 
-本修复仍不代表真实 ADC 测量、硬件连接、校准精度或全部 CMSIS 指令已经上板验收。当前容器没有 ARM 工具链，完整固件编译验证在 GitHub Actions 执行，不把主机测试误报为 ARM 构建。
+本修复仍不代表真实 ADC 测量、硬件连接、校准精度或全部 CMSIS 指令已经上板验收。完整固件编译验证在 GitHub Actions 执行，不把主机测试误报为 ARM 构建。
 
 ## 分支与回滚
 
-继续使用 `refactor/app-driver-layering`，不修改 main，不自动合并，不修改另一份旧分层分支。回滚时撤销本次构建修复提交，保留分层代码；干净构建会恢复原先的缺失依赖错误。生成目录是构建产物，不是需要手动提交到标准库子模块的文件。
+CMSIS 修复已随 PR #2 合入 main；Start/User 目录迁移单独审查，不自动合并。撤销目录迁移提交可恢复原构建入口和项目文件位置，不撤销已生效的 CMSIS 修复。生成目录是构建产物，不是需要手动提交到标准库子模块的文件。
