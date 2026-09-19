@@ -48,6 +48,12 @@ jobs:
           cmake --version
           ninja --version
           git submodule status
+      - name: Host layering regression tests
+        run: |
+          set -euo pipefail
+          cmake -S tests/layering -B firmware/build/host-${{ matrix.build_type }} -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build firmware/build/host-${{ matrix.build_type }} --parallel 2
+          ctest --test-dir firmware/build/host-${{ matrix.build_type }} --output-on-failure
       - name: Configure
         run: >-
           cmake -S firmware -B firmware/build/${{ matrix.build_type }} -G Ninja
