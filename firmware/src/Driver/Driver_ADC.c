@@ -19,8 +19,8 @@ static FunctionalState s_adc1_ready = DISABLE;
  */
 ErrorStatus Driver_ADC1_Init(void)
 {
-    GPIO_InitTypeDef gpio_init; /* PA0 引脚配置。 */
-    ADC_InitTypeDef adc_init;   /* ADC 工作方式配置。 */
+    GPIO_InitTypeDef GPIO_InitStructure; /* PA0 引脚配置。 */
+    ADC_InitTypeDef ADC_InitStructure;   /* ADC 工作方式配置。 */
     uint32_t start_ms;          /* 当前等待阶段的起始时间。 */
 
     /* 初始化失败或重新初始化期间，拒绝读取尚未就绪的 ADC。 */
@@ -38,22 +38,22 @@ ErrorStatus Driver_ADC1_Init(void)
     ADC_DeInit(ADC1);
 
     /* 2. PA0 配置为模拟输入。 */
-    GPIO_StructInit(&gpio_init);
-    gpio_init.GPIO_Pin = GPIO_Pin_0;
-    gpio_init.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &gpio_init);
+    GPIO_StructInit(&GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     /* 3. 配置 ADC1 的工作方式。 */
-    ADC_StructInit(&adc_init);
+    ADC_StructInit(&ADC_InitStructure);
 
-    adc_init.ADC_Mode = ADC_Mode_Independent;
-    adc_init.ADC_ScanConvMode = DISABLE;
-    adc_init.ADC_ContinuousConvMode = DISABLE;
-    adc_init.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
-    adc_init.ADC_DataAlign = ADC_DataAlign_Right;
-    adc_init.ADC_NbrOfChannel = 1;
+    ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+    ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+    ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
+    ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+    ADC_InitStructure.ADC_NbrOfChannel = 1;
 
-    ADC_Init(ADC1, &adc_init);
+    ADC_Init(ADC1, &ADC_InitStructure);
 
     /* 4. 规则序列第 1 位采集通道 0，即 PA0。 */
     ADC_RegularChannelConfig(
