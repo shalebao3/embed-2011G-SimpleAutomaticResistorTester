@@ -69,12 +69,14 @@ def main() -> None:
     for filename in ("startup.cmake", "cmsis-compat.cmake", "STM32F103xx_FLASH.ld"):
         require((firmware / "Start" / filename).is_file(), "Start 缺少 " + filename)
     require(not (firmware / "STM32F103xx_FLASH.ld").exists(), "仍遗留 firmware 根目录下的链接脚本")
+    for filename in ("Interface_LED.c", "Interface_LED.h"):
+        require(not (project_source / "Interface" / filename).exists(), "仍遗留已移除的 LED 示例：" + filename)
+    require(not any(Path(entry["file"]).name == "Interface_LED.c" for entry in commands), "已移除的 LED 示例仍参与固件编译")
     expected_units = {
         "main.c": project_source / "User/main.c",
         "stm32f10x_it.c": project_source / "User/stm32f10x_it.c",
         "App_ResistorTester.c": project_source / "App/App_ResistorTester.c",
         "Driver_ADC.c": project_source / "Driver/Driver_ADC.c",
-        "Interface_LED.c": project_source / "Interface/Interface_LED.c",
         "Com_Time.c": project_source / "Common/Com_Time.c",
         "system_stm32f10x.c": device / "system_stm32f10x.c",
         "startup_stm32f10x_md.s": device / "startup/TrueSTUDIO/startup_stm32f10x_md.s",
@@ -96,7 +98,7 @@ def main() -> None:
         artifact = build / (project + suffix)
         require(artifact.is_file() and artifact.stat().st_size > 0, "缺少构建产物：" + str(artifact))
     print("PASS: original header hash, byte-identical restore, only three STREX edits, single core source, clean pinned submodule, BIN/HEX/MAP artifacts")
-    print("PASS: src/Start layout, unique project/system/GNU startup units, no legacy source roots or host mocks")
+    print("PASS: src/Start layout, unique project/system/GNU startup units, no legacy source roots or host mocks, LED demo removed")
 
 
 if __name__ == "__main__":

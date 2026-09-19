@@ -10,20 +10,19 @@
 | [stm32f10x_it.h](stm32f10x_it.h) | 中断函数声明 |
 | [stm32f10x_conf.h](stm32f10x_conf.h) | 项目选择的标准外设库头文件和断言配置，不是第三方内核头文件 |
 
-不要把全部自定义代码重新堆进 User：ADC 在 `Driver`，LED 在 `Interface`，时基在 `Common`，仪器业务在 `App`；这些项目源码目录均位于 `firmware/src/`。这里的“入口”不是说上电后 CPU 首先执行 main；复位和启动支持见 [Start](../../Start/README.md)。
+不要把全部自定义代码重新堆进 User：ADC 在 `Driver`，时基在 `Common`，仪器业务在 `App`；这些项目源码目录均位于 `firmware/src/`。板载 LED 示例已移除，`Interface` 保留为后续具体硬件模块接口的目录约定。这里的“入口”不是说上电后 CPU 首先执行 main；复位和启动支持见 [Start](../../Start/README.md)。
 
-初始化顺序不变：
+初始化顺序：
 
 ```text
 main
  ├─ SystemCoreClockUpdate
  ├─ Com_Time_Init
  ├─ App_ResistorTester_Init
- │    ├─ Interface_LED_Init
  │    └─ Driver_ADC1_Init
  └─ while (1) → App_ResistorTester_Task
 
 SysTick_Handler → Com_Time_Tick
 ```
 
-ADC 的延时和超时依赖已工作的 SysTick，因此不能把时基初始化移到 ADC 初始化之后。更多运行边界见 [软件分层说明](../../../docs/software-layering.md)。
+ADC 的延时和超时依赖已工作的 SysTick，因此不能把时基初始化移到 ADC 初始化之后。当前应用任务为空入口，不访问硬件、不延时，也不自动启动 ADC 转换；周期测量稍后再接入。更多运行边界见 [软件分层说明](../../../docs/software-layering.md)。

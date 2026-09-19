@@ -953,9 +953,9 @@ ADC + GPIO + 继电器驱动跑通
 
 ## 11. 当前程序状态
 
-现有代码已完成 ADC1/PA0 的标准库初始化与校准超时处理，并保留 PC13 LED 闪烁验证程序。尚未实现 ADC 读取、电阻换算和自动量程。主机测试与交叉编译不等于已经上板验证测量精度。
+现有代码已完成 ADC1/PA0 的标准库初始化、校准超时处理和单次原始值读取驱动。板载 PC13 LED 闪烁示例及其驱动已移除。尚未接入应用层周期采样、电阻换算和自动量程。主机测试与交叉编译不等于已经上板验证测量精度。
 
-`main.c` 位于 `firmware/src/User/`，只组织时基启动、应用初始化和任务调用。ADC、LED 和时间服务分别在 `src/Driver`、`src/Interface`、`src/Common`；当前应用任务仍保留阻塞式亮 500ms、灭 500ms，不把目录整理当成非阻塞调度已完成。
+`main.c` 位于 `firmware/src/User/`，只组织时基启动、应用初始化和任务调用。ADC 和时间服务分别在 `src/Driver`、`src/Common`；`App_ResistorTester_Task()` 当前为空入口，不访问硬件、不延时，也不自动启动 ADC 转换。移除 LED 示例不代表测量调度已经完成。
 
 ---
 
@@ -969,15 +969,14 @@ ADC + GPIO + 继电器驱动跑通
 | [src/User](firmware/src/User/README.md) | main、项目中断、标准库配置；不是全部业务代码的容器 |
 | `src/App` | 电阻测试仪初始化和任务组织；后续放测量调度与量程策略 |
 | `src/Driver` | ADC 等片内外设的标准库操作 |
-| `src/Interface` | LED 等具体硬件模块操作；后续再加入量程切换接口 |
+| [src/Interface](firmware/src/Interface/README.md) | 预留具体硬件模块接口的目录约定；当前无编译源文件，后续按需加入量程切换接口 |
 | `src/Common` | 毫秒时间服务等公共能力 |
 | `Libraries` | 固定版本第三方标准库和 CMSIS 原始源码 |
 
-`Start` 已接入顶层 CMake，不是空目录。原厂启动和系统源码仍在 `Libraries`，不重复复制一套；原 `Core/Inc`、`Core/Src` 的五个项目文件现在位于 `src/User`，不再保留旧目录。此次只整理源码和链接脚本位置，项目 `.c/.h`、链接脚本内容及标准库版本不变。
+`Start` 已接入顶层 CMake，不是空目录。原厂启动和系统源码仍在 `Libraries`，不重复复制一套；原 `Core/Inc`、`Core/Src` 的五个项目文件现在位于 `src/User`，不再保留旧目录。此前目录迁移未改变项目 `.c/.h`、链接脚本内容及标准库版本；当前 LED 清理仅移除示例，不改变 ADC 与时基实现。
 
 ```text
 main → Com_Time_Init → App_ResistorTester_Init
-                           ├─ Interface_LED_Init
                            └─ Driver_ADC1_Init
 
 while (1) → App_ResistorTester_Task

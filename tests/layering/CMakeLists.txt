@@ -12,7 +12,6 @@ add_executable(test_modules
     test_modules.c
     "${FIRMWARE_SRC}/App/App_ResistorTester.c"
     "${FIRMWARE_SRC}/Driver/Driver_ADC.c"
-    "${FIRMWARE_SRC}/Interface/Interface_LED.c"
 )
 add_executable(test_time
     test_time.c
@@ -21,7 +20,7 @@ add_executable(test_time
 foreach(target test_modules test_time)
     target_include_directories(${target} PRIVATE
         mocks "${FIRMWARE_SRC}/App" "${FIRMWARE_SRC}/Driver"
-        "${FIRMWARE_SRC}/Interface" "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
+        "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
     )
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)
@@ -29,7 +28,7 @@ foreach(target test_modules test_time)
 endforeach()
 
 foreach(case adc_ok adc_reset_timeout adc_cal_timeout adc_reset_timeout_wrap
-             adc_cal_timeout_wrap app_ok app_reset_timeout app_cal_timeout led app_cycle)
+             adc_cal_timeout_wrap app_ok app_reset_timeout app_cal_timeout app_idle)
     add_test(NAME ${case} COMMAND test_modules ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()

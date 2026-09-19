@@ -1,4 +1,4 @@
-/* 使用接口替身验证真实 App/Driver/Interface 源码，不模拟 ADC 电气行为。 */
+/* 使用接口替身验证真实 App/Driver 源码，不模拟 ADC 电气行为。 */
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -6,14 +6,13 @@
 #include <string.h>
 #include "App_ResistorTester.h"
 #include "Driver_ADC.h"
-#include "Interface_LED.h"
 #include "Com_Time.h"
 
 #define CHECK(expr) do { if (!(expr)) { \
     fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #expr); \
     exit(EXIT_FAILURE); } } while (0)
 
-GPIO_TypeDef mock_gpio_a, mock_gpio_c;
+GPIO_TypeDef mock_gpio_a;
 ADC_TypeDef mock_adc1;
 static uint32_t now_ms;
 static unsigned reset_polls, cal_polls;
@@ -27,10 +26,10 @@ static int events[128];
 static size_t event_count;
 
 enum {
-    CLOCK_LED, CLOCK_ADC, ADC_DIV6, ADC_RESET, GPIO_DEFAULTS,
-    GPIO_LED, GPIO_ANALOG, LED_OFF, LED_ON, ADC_DEFAULTS, ADC_SETUP,
+    CLOCK_ADC, ADC_DIV6, ADC_RESET, GPIO_DEFAULTS,
+    GPIO_ANALOG, ADC_DEFAULTS, ADC_SETUP,
     ADC_CHANNEL0, ADC_ENABLE, DELAY_2MS, RESET_CAL, START_CAL,
-    ADC_DISABLE, DELAY_500MS, EOC_CLEAR, CONVERSION_START, CONVERSION_READ
+    ADC_DISABLE, EOC_CLEAR, CONVERSION_START, CONVERSION_READ
 };
 
 static void record(int event)
@@ -48,17 +47,16 @@ static void expect_events(const int *expected, size_t count)
 uint32_t Com_Time_GetMs(void) { return now_ms++; }
 void Com_Time_DelayMs(uint32_t delay_ms)
 {
-    CHECK(delay_ms == 2U || delay_ms == 500U);
-    record(delay_ms == 2U ? DELAY_2MS : DELAY_500MS);
+    CHECK(delay_ms == 2U);
+    record(DELAY_2MS);
     now_ms += delay_ms;
 }
 
 void RCC_APB2PeriphClockCmd(uint32_t peripheral, FunctionalState state)
 {
     CHECK(state == ENABLE);
-    CHECK(peripheral == RCC_APB2Periph_GPIOC ||
-          peripheral == (RCC_APB2Periph_GPIOA | RCC_APB2Periph_ADC1));
-    record(peripheral == RCC_APB2Periph_GPIOC ? CLOCK_LED : CLOCK_ADC);
+    CHECK(peripheral == (RCC_APB2Periph_GPIOA | RCC_APB2Periph_ADC1));
+    record(CLOCK_ADC);
 }
 void RCC_ADCCLKConfig(uint32_t divider) { CHECK(divider == RCC_PCLK2_Div6); record(ADC_DIV6); }
 void ADC_DeInit(ADC_TypeDef *adc) { CHECK(adc == ADC1); record(ADC_RESET); }
@@ -69,22 +67,9 @@ void GPIO_StructInit(GPIO_InitTypeDef *config)
 }
 void GPIO_Init(GPIO_TypeDef *port, GPIO_InitTypeDef *config)
 {
-    if (port == GPIOA) {
-        CHECK(config->GPIO_Pin == GPIO_Pin_0 && config->GPIO_Mode == GPIO_Mode_AIN);
-        record(GPIO_ANALOG);
-    } else {
-        CHECK(port == GPIOC && config->GPIO_Pin == GPIO_Pin_13);
-        CHECK(config->GPIO_Mode == GPIO_Mode_Out_PP && config->GPIO_Speed == GPIO_Speed_2MHz);
-        record(GPIO_LED);
-    }
-}
-void GPIO_SetBits(GPIO_TypeDef *port, uint16_t pins)
-{
-    CHECK(port == GPIOC && pins == GPIO_Pin_13); record(LED_OFF);
-}
-void GPIO_ResetBits(GPIO_TypeDef *port, uint16_t pins)
-{
-    CHECK(port == GPIOC && pins == GPIO_Pin_13); record(LED_ON);
+    CHECK(port == GPIOA);
+    CHECK(config->GPIO_Pin == GPIO_Pin_0 && config->GPIO_Mode == GPIO_Mode_AIN);
+    record(GPIO_ANALOG);
 }
 void ADC_StructInit(ADC_InitTypeDef *config)
 {
@@ -239,15 +224,16 @@ int main(int argc, char **argv)
     const char *name = argv[1];
     if (strncmp(name, "read_", 5U) == 0) {
         test_read(name);
-    } else if (strcmp(name, "led") == 0) {
-        const int expected[] = {CLOCK_LED, GPIO_DEFAULTS, GPIO_LED, LED_OFF, LED_ON, LED_OFF};
-        Interface_LED_Init(); Interface_LED_Set(true); Interface_LED_Set(false);
-        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
-    } else if (strcmp(name, "app_cycle") == 0) {
-        const int expected[] = {LED_ON, DELAY_500MS, LED_OFF, DELAY_500MS};
-        App_ResistorTester_Task();
-        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
-        CHECK(now_ms == 1000U);
+    } else if (strcmp(name, "app_idle") == 0) {
+        CHECK(App_ResistorTester_Init() == SUCCESS);
+        event_count = 0U;
+        const uint32_t before = now_ms;
+        /* 空任务不访问 GPIO、不延时，也不擅自启动转换。 */
+        for (unsigned i = 0U; i < 100U; ++i) {
+            App_ResistorTester_Task();
+        }
+        CHECK(event_count == 0U && now_ms == before);
+        CHECK(adc_enabled && conversion_starts == 0U);
     } else {
         reset_stuck = strstr(name, "reset_timeout") != NULL;
         cal_stuck = strstr(name, "cal_timeout") != NULL;
@@ -260,10 +246,6 @@ int main(int argc, char **argv)
             ADC_DEFAULTS, ADC_SETUP, ADC_CHANNEL0, ADC_ENABLE, DELAY_2MS, RESET_CAL
         };
         size_t offset = 0U;
-        if (is_app) {
-            const int led_prefix[] = {CLOCK_LED, GPIO_DEFAULTS, GPIO_LED, LED_OFF};
-            for (size_t i = 0; i < 4U; ++i) { CHECK(events[offset++] == led_prefix[i]); }
-        }
         for (size_t i = 0; i < sizeof(adc_prefix) / sizeof(adc_prefix[0]); ++i) {
             CHECK(events[offset++] == adc_prefix[i]);
         }
