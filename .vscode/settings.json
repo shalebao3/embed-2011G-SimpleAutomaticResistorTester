@@ -1,5 +1,6 @@
 {
   "cmake.sourceDirectory": "${workspaceFolder}/firmware",
   "cmake.useCMakePresets": "always",
-  "cmake.configureOnOpen": true
+  "cmake.configureOnOpen": true,
+  "git.detectSubmodules": false
 }

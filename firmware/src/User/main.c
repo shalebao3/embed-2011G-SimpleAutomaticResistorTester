@@ -7,6 +7,7 @@
  */
 int main(void)
 {
+    /* STM32F10x 系列芯片的时钟配置由系统库提供，使用 HSE 外部晶振作为系统时钟源。 */
     SystemCoreClockUpdate();
 
     /* ADC 初始化使用延时与超时判断，时间基准必须先启动。 */
