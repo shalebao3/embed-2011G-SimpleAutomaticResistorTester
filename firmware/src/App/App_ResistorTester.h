@@ -5,14 +5,15 @@
 #include "stm32f10x.h"
 
 /**
- * @brief 单档测量的最新结果。
- * @note 当前 resistance_ohm 按临时 330Ω 参考电阻和既定分压拓扑计算；
- *       该参数只服务于第一版单档验证，不代表最终自动量程 BOM。
+ * @brief 最近一次有效测量结果。
+ * @note reference_resistor_ohm 记录本次换算实际使用的参考电阻，
+ *       后续加入多量程后，显示和调试代码无需猜测当前量程参数。
  */
 typedef struct
 {
-    uint16_t adc_raw;          /* ADC1/PA0 原始值，范围 0～4095。 */
-    uint32_t resistance_ohm;   /* 根据当前单档参考电阻换算出的待测电阻，单位 Ω。 */
+    uint16_t adc_raw;                 /* ADC1/PA0 原始值，范围 0～4095。 */
+    uint32_t resistance_ohm;          /* 换算出的待测电阻，单位 Ω。 */
+    uint32_t reference_resistor_ohm;  /* 本次换算使用的参考电阻，单位 Ω。 */
 } App_ResistorTesterMeasurement;
 
 /**
@@ -24,8 +25,8 @@ ErrorStatus App_ResistorTester_Init(void);
 
 /**
  * @brief 非阻塞应用任务：按固定周期触发一次 ADC 单次读取并换算电阻。
- * @note 当前采样周期为 100ms，第一轮调用立即采样。
- *       本函数不延时、不自动恢复 ADC 故障、不执行自动量程。
+ * @note 当前只注册一个临时单档配置：Rref=330Ω，采样周期 100ms。
+ *       第一轮调用立即采样；不自动恢复 ADC 故障、不执行自动量程。
  *       只能在初始化成功后的主循环调用，不能在中断中调用。
  */
 void App_ResistorTester_Task(void);

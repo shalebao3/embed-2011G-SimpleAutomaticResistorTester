@@ -221,7 +221,11 @@ static void test_read(const char *name)
 
 static void test_app_measurement(const char *name)
 {
-    App_ResistorTesterMeasurement measurement = {0xAAAAU, 0x55555555U};
+    App_ResistorTesterMeasurement measurement = {
+        0xAAAAU,
+        0x55555555U,
+        0x33333333U
+    };
 
     CHECK(App_ResistorTester_Init() == SUCCESS);
     event_count = 0U;
@@ -229,7 +233,8 @@ static void test_app_measurement(const char *name)
     if (strcmp(name, "measure_get_before_sample") == 0) {
         CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
         CHECK(measurement.adc_raw == 0xAAAAU &&
-              measurement.resistance_ohm == 0x55555555U);
+              measurement.resistance_ohm == 0x55555555U &&
+              measurement.reference_resistor_ohm == 0x33333333U);
         CHECK(App_ResistorTester_GetLatestMeasurement(NULL) == ERROR);
         CHECK(conversion_starts == 0U);
         return;
@@ -256,6 +261,7 @@ static void test_app_measurement(const char *name)
 
     CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
     CHECK(measurement.adc_raw == conversion_input);
+    CHECK(measurement.reference_resistor_ohm == 330U);
 
     if (strcmp(name, "measure_midscale") == 0) {
         CHECK(measurement.resistance_ohm == 330U);
