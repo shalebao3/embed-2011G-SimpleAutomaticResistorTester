@@ -31,6 +31,10 @@ if(NOT EXISTS "${STDPERIPH_DRIVER}/src/stm32f10x_gpio.c")
     )
 endif()
 
+# 在构建目录恢复配套头文件并适配旧 CMSIS 的 GNU 汇编约束。
+# 不修改第三方子模块，具体来源和修复范围见 docs/cmsis-build-fix.md。
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmsis-compat.cmake")
+
 file(GLOB STDPERIPH_SOURCES CONFIGURE_DEPENDS
     "${STDPERIPH_DRIVER}/src/*.c"
 )
@@ -42,6 +46,7 @@ add_library(stm32_stdperiph STATIC
 target_include_directories(stm32_stdperiph PUBLIC
     "${CMAKE_SOURCE_DIR}/Core/Inc"
     "${STDPERIPH_DRIVER}/inc"
+    "${CMSIS_CORE_INCLUDE}"
     "${CMSIS_CORE}"
     "${CMSIS_DEVICE}"
 )
@@ -61,13 +66,21 @@ target_compile_options(stm32_stdperiph PRIVATE
 add_executable(${CMAKE_PROJECT_NAME}
     Core/Src/main.c
     Core/Src/stm32f10x_it.c
-    "${CMSIS_CORE}/core_cm3.c"
+    App/App_ResistorTester.c
+    Driver/Driver_ADC.c
+    Interface/Interface_LED.c
+    Common/Com_Time.c
+    "${CMSIS_CORE_SOURCE}"
     "${CMSIS_DEVICE}/system_stm32f10x.c"
     "${STARTUP_FILE}"
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Inc
+    App
+    Driver
+    Interface
+    Common
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

@@ -1,0 +1,65 @@
+name: CMake Firmware Build
+
+on:
+  push:
+    branches: [main, 'refactor/**']
+    paths:
+      - 'firmware/**'
+      - 'tests/**'
+      - '.gitmodules'
+      - '.github/workflows/firmware-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - 'tests/**'
+      - '.gitmodules'
+      - '.github/workflows/firmware-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Firmware (${{ matrix.build_type }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - name: Checkout with pinned standard library
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install ARM toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build
+          arm-none-eabi-gcc --version
+          cmake --version
+          ninja --version
+          git submodule status
+      - name: Host layering regression tests
+        run: |
+          set -euo pipefail
+          cmake -S tests/layering -B firmware/build/host-${{ matrix.build_type }} -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build firmware/build/host-${{ matrix.build_type }} --parallel 2
+          ctest --test-dir firmware/build/host-${{ matrix.build_type }} --output-on-failure
+      - name: Configure
+        run: >-
+          cmake -S firmware -B firmware/build/${{ matrix.build_type }} -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/firmware/cmake/gcc-arm-none-eabi.cmake"
+      - name: Compile and link
+        run: cmake --build firmware/build/${{ matrix.build_type }} --parallel 2
+      - name: Verify CMSIS restore and unchanged submodule
+        run: python3 tests/check_cmsis_compat.py firmware/build/${{ matrix.build_type }}

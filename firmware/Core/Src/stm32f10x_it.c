@@ -1,4 +1,5 @@
 #include "stm32f10x_it.h"
+#include "Com_Time.h"
 
 void NMI_Handler(void)
 {
@@ -46,5 +47,6 @@ void PendSV_Handler(void)
 
 void SysTick_Handler(void)
 {
-    g_ms_ticks++;
+    /* 中断入口只通知时间模块，不直接操作其私有计数。 */
+    Com_Time_Tick();
 }
