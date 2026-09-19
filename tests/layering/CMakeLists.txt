@@ -39,7 +39,11 @@ endforeach()
 
 # App 单档测量测试：验证 330Ω 分压公式、100ms 调度和失败失效语义。
 foreach(case measure_get_before_sample measure_midscale measure_1k measure_zero
-             measure_interval measure_fullscale_invalid measure_read_error_invalid)
+             measure_interval measure_recommend_lower
+             measure_recommend_keep_low_boundary
+             measure_recommend_keep_high_boundary
+             measure_recommend_higher
+             measure_fullscale_invalid measure_read_error_invalid)
     add_test(NAME ${case} COMMAND test_modules ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()
