@@ -11,10 +11,10 @@
 typedef enum
 {
     APP_RESISTOR_RANGE_100_OHM = 0,
-    APP_RESISTOR_RANGE_1K_OHM,
-    APP_RESISTOR_RANGE_10K_OHM,
-    APP_RESISTOR_RANGE_COUNT
-} App_ResistorTesterRange;
+    APP_RESISTOR_RANGE_1K_OHM,  // 自动是 1
+    APP_RESISTOR_RANGE_10K_OHM, // 自动是 2
+    APP_RESISTOR_RANGE_COUNT    // 自动是 3，表示一共几档
+} App_ResistorTesterRange;      // 枚举规则：0 表示 100 Ω，1 表示 1K Ω，2 表示 10K Ω，3 表示无效。
 
 /**
  * @brief 最近一次有效测量结果。

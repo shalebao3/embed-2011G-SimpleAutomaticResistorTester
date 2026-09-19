@@ -28,10 +28,14 @@ typedef struct
  * 33Ω / 330Ω / 3.3kΩ 仍需结合真实硬件误差预算后再定 BOM。
  */
 static const App_ResistorTesterRangeConfig s_range_configs[APP_RESISTOR_RANGE_COUNT] =
-{
-    [APP_RESISTOR_RANGE_100_OHM] = {33U},
-    [APP_RESISTOR_RANGE_1K_OHM] = {330U},
-    [APP_RESISTOR_RANGE_10K_OHM] = {3300U}
+    {
+        [APP_RESISTOR_RANGE_100_OHM] = {33U},
+        [APP_RESISTOR_RANGE_1K_OHM] = {330U},
+        [APP_RESISTOR_RANGE_10K_OHM] = {3300U} 
+        // 等价于下面的写法，但更清晰：
+        // s_range_configs[0].reference_resistor_ohm = 33;
+        // s_range_configs[1].reference_resistor_ohm = 330;
+        // s_range_configs[2].reference_resistor_ohm = 3300;
 };
 
 /*
