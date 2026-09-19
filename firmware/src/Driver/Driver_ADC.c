@@ -41,6 +41,7 @@ ErrorStatus Driver_ADC1_Init(void)
     GPIO_StructInit(&GPIO_InitStructure);
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     /* 3. 配置 ADC1 的工作方式。 */
