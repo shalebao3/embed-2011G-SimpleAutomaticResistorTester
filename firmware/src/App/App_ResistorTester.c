@@ -1,6 +1,7 @@
 #include "App_ResistorTester.h"
 #include "Com_Time.h"
 #include "Driver_ADC.h"
+#include "Interface_Range.h"
 #include <stddef.h>
 
 /* STM32F103 12 位 ADC 的最大码值。 */
@@ -34,8 +35,8 @@ static const App_ResistorTesterRangeConfig s_range_configs[APP_RESISTOR_RANGE_CO
 };
 
 /*
- * GPIO/继电器尚未实现，因此当前真实有效量程固定在 1kΩ 档。
- * 在 Interface_Range 接入以前禁止根据推荐结果直接修改此状态。
+ * 启动阶段会让 Interface_Range 同步选中 1kΩ 档。
+ * 自动切换尚未接通，因此运行期间仍固定保持该量程。
  */
 static const App_ResistorTesterRange s_active_range = APP_RESISTOR_RANGE_1K_OHM;
 
@@ -103,7 +104,38 @@ static App_ResistorTesterRange App_ResistorTester_RecommendRange(
 }
 
 /**
- * @brief 初始化仪器 ADC；时间基准由 main 提前建立。
+ * @brief 将 App 的逻辑量程映射到硬件接口量程。
+ */
+static ErrorStatus App_ResistorTester_MapRangeToInterface(
+    App_ResistorTesterRange app_range,
+    Interface_Range *interface_range)
+{
+    if (interface_range == NULL)
+    {
+        return ERROR;
+    }
+
+    switch (app_range)
+    {
+        case APP_RESISTOR_RANGE_100_OHM:
+            *interface_range = INTERFACE_RANGE_100_OHM;
+            return SUCCESS;
+
+        case APP_RESISTOR_RANGE_1K_OHM:
+            *interface_range = INTERFACE_RANGE_1K_OHM;
+            return SUCCESS;
+
+        case APP_RESISTOR_RANGE_10K_OHM:
+            *interface_range = INTERFACE_RANGE_10K_OHM;
+            return SUCCESS;
+
+        default:
+            return ERROR;
+    }
+}
+
+/**
+ * @brief 初始化仪器量程接口与 ADC；时间基准由 main 提前建立。
  */
 ErrorStatus App_ResistorTester_Init(void)
 {
@@ -113,10 +145,30 @@ ErrorStatus App_ResistorTester_Init(void)
     s_latest_measurement.adc_raw = 0U;
     s_latest_measurement.resistance_ohm = 0U;
     s_latest_measurement.reference_resistor_ohm = 0U;
+    Interface_Range interface_range;
+
     s_latest_measurement.active_range = s_active_range;
     s_latest_measurement.recommended_range = s_active_range;
 
-    return Driver_ADC1_Init();
+    Interface_Range_Init();
+
+    if ((App_ResistorTester_MapRangeToInterface(
+             s_active_range,
+             &interface_range) != SUCCESS) ||
+        (Interface_Range_Select(interface_range) != SUCCESS))
+    {
+        Interface_Range_DisableAll();
+        return ERROR;
+    }
+
+    if (Driver_ADC1_Init() != SUCCESS)
+    {
+        /* ADC 无法工作时，不让继电器继续保持吸合。 */
+        Interface_Range_DisableAll();
+        return ERROR;
+    }
+
+    return SUCCESS;
 }
 
 /**

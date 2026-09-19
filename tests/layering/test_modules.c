@@ -6,6 +6,7 @@
 #include <string.h>
 #include "App_ResistorTester.h"
 #include "Driver_ADC.h"
+#include "Interface_Range.h"
 #include "Com_Time.h"
 
 #define CHECK(expr) do { if (!(expr)) { \
@@ -13,6 +14,7 @@
     exit(EXIT_FAILURE); } } while (0)
 
 GPIO_TypeDef mock_gpio_a;
+GPIO_TypeDef mock_gpio_b;
 ADC_TypeDef mock_adc1;
 static uint32_t now_ms;
 static unsigned reset_polls, cal_polls;
@@ -29,7 +31,9 @@ enum {
     CLOCK_ADC, ADC_DIV6, ADC_RESET, GPIO_DEFAULTS,
     GPIO_ANALOG, ADC_DEFAULTS, ADC_SETUP,
     ADC_CHANNEL0, ADC_ENABLE, DELAY_2MS, RESET_CAL, START_CAL,
-    ADC_DISABLE, EOC_CLEAR, CONVERSION_START, CONVERSION_READ
+    ADC_DISABLE, EOC_CLEAR, CONVERSION_START, CONVERSION_READ,
+    CLOCK_RANGE, RANGE_ALL_OFF, RANGE_GPIO_OUTPUT,
+    RANGE_SET_100, RANGE_SET_1K, RANGE_SET_10K
 };
 
 static void record(int event)
@@ -55,8 +59,14 @@ void Com_Time_DelayMs(uint32_t delay_ms)
 void RCC_APB2PeriphClockCmd(uint32_t peripheral, FunctionalState state)
 {
     CHECK(state == ENABLE);
-    CHECK(peripheral == (RCC_APB2Periph_GPIOA | RCC_APB2Periph_ADC1));
-    record(CLOCK_ADC);
+
+    if (peripheral == (RCC_APB2Periph_GPIOA | RCC_APB2Periph_ADC1)) {
+        record(CLOCK_ADC);
+        return;
+    }
+
+    CHECK(peripheral == RCC_APB2Periph_GPIOB);
+    record(CLOCK_RANGE);
 }
 void RCC_ADCCLKConfig(uint32_t divider) { CHECK(divider == RCC_PCLK2_Div6); record(ADC_DIV6); }
 void ADC_DeInit(ADC_TypeDef *adc) { CHECK(adc == ADC1); record(ADC_RESET); }
@@ -67,9 +77,38 @@ void GPIO_StructInit(GPIO_InitTypeDef *config)
 }
 void GPIO_Init(GPIO_TypeDef *port, GPIO_InitTypeDef *config)
 {
-    CHECK(port == GPIOA);
-    CHECK(config->GPIO_Pin == GPIO_Pin_0 && config->GPIO_Mode == GPIO_Mode_AIN);
-    record(GPIO_ANALOG);
+    if (port == GPIOA) {
+        CHECK(config->GPIO_Pin == GPIO_Pin_0 && config->GPIO_Mode == GPIO_Mode_AIN);
+        record(GPIO_ANALOG);
+        return;
+    }
+
+    CHECK(port == GPIOB);
+    CHECK(config->GPIO_Pin == (GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14));
+    CHECK(config->GPIO_Mode == GPIO_Mode_Out_PP);
+    CHECK(config->GPIO_Speed == GPIO_Speed_2MHz);
+    record(RANGE_GPIO_OUTPUT);
+}
+
+void GPIO_ResetBits(GPIO_TypeDef *port, uint16_t pins)
+{
+    CHECK(port == GPIOB);
+    CHECK(pins == (GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14));
+    record(RANGE_ALL_OFF);
+}
+
+void GPIO_SetBits(GPIO_TypeDef *port, uint16_t pins)
+{
+    CHECK(port == GPIOB);
+
+    if (pins == GPIO_Pin_12) {
+        record(RANGE_SET_100);
+    } else if (pins == GPIO_Pin_13) {
+        record(RANGE_SET_1K);
+    } else {
+        CHECK(pins == GPIO_Pin_14);
+        record(RANGE_SET_10K);
+    }
 }
 void ADC_StructInit(ADC_InitTypeDef *config)
 {
@@ -142,6 +181,45 @@ uint16_t ADC_GetConversionValue(ADC_TypeDef *adc)
     eoc = RESET;
     record(CONVERSION_READ);
     return data_register;
+}
+
+
+static void test_range_interface(const char *name)
+{
+    const int init_expected[] = {
+        CLOCK_RANGE, RANGE_ALL_OFF, GPIO_DEFAULTS, RANGE_GPIO_OUTPUT
+    };
+
+    Interface_Range_Init();
+    expect_events(init_expected, sizeof(init_expected) / sizeof(init_expected[0]));
+    event_count = 0U;
+
+    if (strcmp(name, "range_init") == 0) {
+        return;
+    }
+
+    if (strcmp(name, "range_select_100") == 0) {
+        const int expected[] = {RANGE_ALL_OFF, RANGE_SET_100};
+        CHECK(Interface_Range_Select(INTERFACE_RANGE_100_OHM) == SUCCESS);
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    } else if (strcmp(name, "range_select_1k") == 0) {
+        const int expected[] = {RANGE_ALL_OFF, RANGE_SET_1K};
+        CHECK(Interface_Range_Select(INTERFACE_RANGE_1K_OHM) == SUCCESS);
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    } else if (strcmp(name, "range_select_10k") == 0) {
+        const int expected[] = {RANGE_ALL_OFF, RANGE_SET_10K};
+        CHECK(Interface_Range_Select(INTERFACE_RANGE_10K_OHM) == SUCCESS);
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    } else if (strcmp(name, "range_invalid") == 0) {
+        CHECK(Interface_Range_Select((Interface_Range)99) == ERROR);
+        CHECK(event_count == 0U);
+    } else if (strcmp(name, "range_disable_all") == 0) {
+        const int expected[] = {RANGE_ALL_OFF};
+        Interface_Range_DisableAll();
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    } else {
+        CHECK(0);
+    }
 }
 
 /* 每个 CTest 用例是独立进程，驱动的私有就绪状态也会重新初始化。 */
@@ -301,7 +379,9 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     const char *name = argv[1];
-    if (strncmp(name, "read_", 5U) == 0) {
+    if (strncmp(name, "range_", 6U) == 0) {
+        test_range_interface(name);
+    } else if (strncmp(name, "read_", 5U) == 0) {
         test_read(name);
     } else if (strncmp(name, "measure_", 8U) == 0) {
         test_app_measurement(name);
@@ -312,21 +392,34 @@ int main(int argc, char **argv)
         const int is_app = strncmp(name, "app_", 4U) == 0;
         const ErrorStatus result = is_app ? App_ResistorTester_Init() : Driver_ADC1_Init();
         CHECK(result == ((reset_stuck || cal_stuck) ? ERROR : SUCCESS));
+
+        size_t offset = 0U;
+        if (is_app) {
+            const int range_prefix[] = {
+                CLOCK_RANGE, RANGE_ALL_OFF, GPIO_DEFAULTS, RANGE_GPIO_OUTPUT,
+                RANGE_ALL_OFF, RANGE_SET_1K
+            };
+            for (size_t i = 0; i < sizeof(range_prefix) / sizeof(range_prefix[0]); ++i) {
+                CHECK(events[offset++] == range_prefix[i]);
+            }
+        }
+
         const int adc_prefix[] = {
             CLOCK_ADC, ADC_DIV6, ADC_RESET, GPIO_DEFAULTS, GPIO_ANALOG,
             ADC_DEFAULTS, ADC_SETUP, ADC_CHANNEL0, ADC_ENABLE, DELAY_2MS, RESET_CAL
         };
-        size_t offset = 0U;
         for (size_t i = 0; i < sizeof(adc_prefix) / sizeof(adc_prefix[0]); ++i) {
             CHECK(events[offset++] == adc_prefix[i]);
         }
         if (reset_stuck) {
             CHECK(reset_polls == 10U && cal_polls == 0U);
             CHECK(events[offset++] == ADC_DISABLE);
+            if (is_app) { CHECK(events[offset++] == RANGE_ALL_OFF); }
         } else {
             CHECK(reset_polls == 2U && events[offset++] == START_CAL);
             if (cal_stuck) {
                 CHECK(cal_polls == 10U && events[offset++] == ADC_DISABLE);
+                if (is_app) { CHECK(events[offset++] == RANGE_ALL_OFF); }
             } else { CHECK(cal_polls == 2U); }
         }
         CHECK(offset == event_count);

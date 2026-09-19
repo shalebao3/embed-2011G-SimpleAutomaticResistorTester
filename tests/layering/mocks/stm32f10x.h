@@ -24,12 +24,20 @@ typedef struct {
 } ADC_InitTypeDef;
 
 extern GPIO_TypeDef mock_gpio_a;
+extern GPIO_TypeDef mock_gpio_b;
 extern ADC_TypeDef mock_adc1;
 #define GPIOA (&mock_gpio_a)
+#define GPIOB (&mock_gpio_b)
 #define ADC1 (&mock_adc1)
 #define GPIO_Pin_0 ((uint16_t)1U)
+#define GPIO_Pin_12 ((uint16_t)0x1000U)
+#define GPIO_Pin_13 ((uint16_t)0x2000U)
+#define GPIO_Pin_14 ((uint16_t)0x4000U)
 #define GPIO_Mode_AIN 0U
+#define GPIO_Mode_Out_PP 1U
+#define GPIO_Speed_2MHz 2U
 #define RCC_APB2Periph_GPIOA 0x4U
+#define RCC_APB2Periph_GPIOB 0x8U
 #define RCC_APB2Periph_ADC1 0x200U
 #define RCC_PCLK2_Div6 0x8000U
 #define ADC_Mode_Independent 0U
@@ -47,6 +55,8 @@ void RCC_APB2PeriphClockCmd(uint32_t peripheral, FunctionalState state);
 void RCC_ADCCLKConfig(uint32_t divider);
 void GPIO_StructInit(GPIO_InitTypeDef *config);
 void GPIO_Init(GPIO_TypeDef *port, GPIO_InitTypeDef *config);
+void GPIO_SetBits(GPIO_TypeDef *port, uint16_t pins);
+void GPIO_ResetBits(GPIO_TypeDef *port, uint16_t pins);
 void ADC_DeInit(ADC_TypeDef *adc);
 void ADC_StructInit(ADC_InitTypeDef *config);
 void ADC_Init(ADC_TypeDef *adc, ADC_InitTypeDef *config);

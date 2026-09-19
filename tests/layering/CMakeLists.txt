@@ -12,6 +12,7 @@ add_executable(test_modules
     test_modules.c
     "${FIRMWARE_SRC}/App/App_ResistorTester.c"
     "${FIRMWARE_SRC}/Driver/Driver_ADC.c"
+    "${FIRMWARE_SRC}/Interface/Interface_Range.c"
 )
 add_executable(test_time
     test_time.c
@@ -20,7 +21,7 @@ add_executable(test_time
 foreach(target test_modules test_time)
     target_include_directories(${target} PRIVATE
         mocks "${FIRMWARE_SRC}/App" "${FIRMWARE_SRC}/Driver"
-        "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
+        "${FIRMWARE_SRC}/Interface" "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
     )
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)
@@ -35,6 +36,12 @@ endforeach()
 foreach(case init_ok init_error tick wrap delay_zero)
     add_test(NAME time_${case} COMMAND test_time ${case})
     set_tests_properties(time_${case} PROPERTIES TIMEOUT 5)
+endforeach()
+
+foreach(case range_init range_select_100 range_select_1k range_select_10k
+             range_invalid range_disable_all)
+    add_test(NAME ${case} COMMAND test_modules ${case})
+    set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()
 
 # App 单档测量测试：验证 330Ω 分压公式、100ms 调度和失败失效语义。
