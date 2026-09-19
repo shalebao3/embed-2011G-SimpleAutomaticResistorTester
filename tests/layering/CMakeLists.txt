@@ -28,13 +28,20 @@ foreach(target test_modules test_time)
 endforeach()
 
 foreach(case adc_ok adc_reset_timeout adc_cal_timeout adc_reset_timeout_wrap
-             adc_cal_timeout_wrap app_ok app_reset_timeout app_cal_timeout app_idle)
+             adc_cal_timeout_wrap app_ok app_reset_timeout app_cal_timeout)
     add_test(NAME ${case} COMMAND test_modules ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()
 foreach(case init_ok init_error tick wrap delay_zero)
     add_test(NAME time_${case} COMMAND test_time ${case})
     set_tests_properties(time_${case} PROPERTIES TIMEOUT 5)
+endforeach()
+
+# App 单档测量测试：验证 330Ω 分压公式、100ms 调度和失败失效语义。
+foreach(case measure_get_before_sample measure_midscale measure_1k measure_zero
+             measure_interval measure_fullscale_invalid measure_read_error_invalid)
+    add_test(NAME ${case} COMMAND test_modules ${case})
+    set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()
 
 # ADC 单次读取的纯主机握手测试；不替代真实芯片验证。

@@ -218,22 +218,69 @@ static void test_read(const char *name)
     }
 }
 
+
+static void test_app_measurement(const char *name)
+{
+    App_ResistorTesterMeasurement measurement = {0xAAAAU, 0x55555555U};
+
+    CHECK(App_ResistorTester_Init() == SUCCESS);
+    event_count = 0U;
+
+    if (strcmp(name, "measure_get_before_sample") == 0) {
+        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+        CHECK(measurement.adc_raw == 0xAAAAU &&
+              measurement.resistance_ohm == 0x55555555U);
+        CHECK(App_ResistorTester_GetLatestMeasurement(NULL) == ERROR);
+        CHECK(conversion_starts == 0U);
+        return;
+    }
+
+    if (strcmp(name, "measure_1k") == 0) { conversion_input = 3079U; }
+    if (strcmp(name, "measure_zero") == 0) { conversion_input = 0U; }
+    if (strcmp(name, "measure_fullscale_invalid") == 0) { conversion_input = 4095U; }
+    if (strcmp(name, "measure_read_error_invalid") == 0) { read_stuck = 1; }
+
+    App_ResistorTester_Task();
+
+    if (strcmp(name, "measure_fullscale_invalid") == 0) {
+        CHECK(conversion_starts == 1U && adc_enabled);
+        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+        return;
+    }
+
+    if (strcmp(name, "measure_read_error_invalid") == 0) {
+        CHECK(conversion_starts == 1U && !adc_enabled);
+        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+        return;
+    }
+
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
+    CHECK(measurement.adc_raw == conversion_input);
+
+    if (strcmp(name, "measure_midscale") == 0) {
+        CHECK(measurement.resistance_ohm == 330U);
+    } else if (strcmp(name, "measure_1k") == 0) {
+        CHECK(measurement.resistance_ohm == 1000U);
+    } else if (strcmp(name, "measure_zero") == 0) {
+        CHECK(measurement.resistance_ohm == 0U);
+    } else if (strcmp(name, "measure_interval") == 0) {
+        const unsigned before = conversion_starts;
+        App_ResistorTester_Task();
+        CHECK(conversion_starts == before);
+        now_ms += 100U;
+        App_ResistorTester_Task();
+        CHECK(conversion_starts == before + 1U);
+    }
+}
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     const char *name = argv[1];
     if (strncmp(name, "read_", 5U) == 0) {
         test_read(name);
-    } else if (strcmp(name, "app_idle") == 0) {
-        CHECK(App_ResistorTester_Init() == SUCCESS);
-        event_count = 0U;
-        const uint32_t before = now_ms;
-        /* 空任务不访问 GPIO、不延时，也不擅自启动转换。 */
-        for (unsigned i = 0U; i < 100U; ++i) {
-            App_ResistorTester_Task();
-        }
-        CHECK(event_count == 0U && now_ms == before);
-        CHECK(adc_enabled && conversion_starts == 0U);
+    } else if (strncmp(name, "measure_", 8U) == 0) {
+        test_app_measurement(name);
     } else {
         reset_stuck = strstr(name, "reset_timeout") != NULL;
         cal_stuck = strstr(name, "cal_timeout") != NULL;
