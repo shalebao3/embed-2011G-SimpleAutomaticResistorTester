@@ -88,6 +88,7 @@ void App_ResistorTester_Task(void)
     uint32_t resistance_ohm;
     const uint32_t now_ms = Com_Time_GetMs();
 
+    /* 采样节奏按“开始到开始”计算，若距离上次采样未满 100ms，则直接返回。 */
     if ((s_sample_started == ENABLE) &&
         ((uint32_t)(now_ms - s_last_sample_ms) < APP_SAMPLE_INTERVAL_MS))
     {
