@@ -31,6 +31,22 @@ if(NOT EXISTS "${STDPERIPH_DRIVER}/src/stm32f10x_gpio.c")
     )
 endif()
 
+# 固定子模块仅保留 core_cm3.h.old。已与 ElectronicsCompetition 中
+# project/BalancingCar/Start/core_cm3.h 核对：两者 Git blob SHA 均为
+# 7ab7b4b43685d3ab2facb53d326c48eeb2bdfda1（CMSIS V1.30）。
+# 只在构建目录恢复正常文件名，不重命名、不修改第三方子模块。
+set(CMSIS_CORE_INCLUDE "${CMSIS_CORE}")
+if(NOT EXISTS "${CMSIS_CORE}/core_cm3.h")
+    if(NOT EXISTS "${CMSIS_CORE}/core_cm3.h.old")
+        message(FATAL_ERROR "CMSIS 缺少 core_cm3.h 和配套的 core_cm3.h.old，请检查标准库子模块。")
+    endif()
+    set(CMSIS_CORE_INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/cmsis-compat")
+    file(MAKE_DIRECTORY "${CMSIS_CORE_INCLUDE}")
+    configure_file("${CMSIS_CORE}/core_cm3.h.old"
+                   "${CMSIS_CORE_INCLUDE}/core_cm3.h" COPYONLY)
+    message(STATUS "Restored CMSIS V1.30 core_cm3.h in build directory")
+endif()
+
 file(GLOB STDPERIPH_SOURCES CONFIGURE_DEPENDS
     "${STDPERIPH_DRIVER}/src/*.c"
 )
@@ -42,6 +58,7 @@ add_library(stm32_stdperiph STATIC
 target_include_directories(stm32_stdperiph PUBLIC
     "${CMAKE_SOURCE_DIR}/Core/Inc"
     "${STDPERIPH_DRIVER}/inc"
+    "${CMSIS_CORE_INCLUDE}"
     "${CMSIS_CORE}"
     "${CMSIS_DEVICE}"
 )
