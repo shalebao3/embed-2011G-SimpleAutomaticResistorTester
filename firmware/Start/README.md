@@ -1,6 +1,6 @@
 # Start：启动与内核支持
 
-这里是 2011G 的**启动支持构建入口和源码导航**，不是应用外设初始化目录。ADC 初始化仍在 `../Driver/Driver_ADC.c`。
+这里是 2011G 的**启动支持构建入口和源码导航**，不是应用外设初始化目录。ADC 初始化仍在 `../src/Driver/Driver_ADC.c`。
 
 ## 本目录实际管理什么
 
@@ -8,8 +8,9 @@
 | --- | --- |
 | [startup.cmake](startup.cmake) | 集中选择 CMSIS、系统初始化和 GNU 启动文件，向顶层 CMake 提供源码与头文件路径 |
 | [cmsis-compat.cmake](cmsis-compat.cmake) | 保留已有 CMSIS V1.30 兼容处理，只在构建目录生成完整头文件和三处 STREX 约束修复后的源码 |
+| [STM32F103xx_FLASH.ld](STM32F103xx_FLASH.ld) | 链接脚本，管理 Flash、RAM 和段布局；从 firmware 根目录原样迁入，内容不变 |
 
-顶层 `firmware/CMakeLists.txt` 包含 `Start/startup.cmake`，把 `STM32_STARTUP_SOURCES` 加入固件目标一次。不是只建一个空文件夹，也没有重复编译内核或启动文件。
+顶层 `firmware/CMakeLists.txt` 包含 `Start/startup.cmake`，把 `STM32_STARTUP_SOURCES` 加入固件目标一次，并通过 `-T` 指向本目录的链接脚本。不是只建一个空文件夹，也没有重复编译内核或启动文件。
 
 ## 底层源码在哪里
 
@@ -28,8 +29,8 @@
 
 ## 边界与调用关系
 
-`Start` 管启动支持，`User` 管项目入口与中断实现，`App` 管业务组织。保留原来的 GNU 启动流程，不拿 BalancingCar 的 MDK-ARM 启动汇编替换。实际进入 C 的入口是 [User/main.c](../User/main.c)，中断处理在 [User/stm32f10x_it.c](../User/stm32f10x_it.c)。
+`Start` 管启动和链接支持，`src/User` 管项目入口与中断实现，`src/App` 管业务组织。保留原来的 GNU 启动流程，不拿 BalancingCar 的 MDK-ARM 启动汇编替换。实际进入 C 的入口是 [User/main.c](../src/User/main.c)，中断处理在 [User/stm32f10x_it.c](../src/User/stm32f10x_it.c)。
 
-链接脚本仍为 [STM32F103xx_FLASH.ld](../STM32F103xx_FLASH.ld)，本次不改变 Flash、RAM、向量表、堆栈布局或时钟参数。
+链接脚本为 [STM32F103xx_FLASH.ld](STM32F103xx_FLASH.ld)，本次只迁移位置，不改变 Flash、RAM、向量表、堆栈布局或时钟参数。
 
 兼容处理的来源、限制和验证见 [CMSIS 构建修复](../../docs/cmsis-build-fix.md)；整体分工见 [软件分层](../../docs/software-layering.md)。

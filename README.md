@@ -955,23 +955,25 @@ ADC + GPIO + 继电器驱动跑通
 
 现有代码已完成 ADC1/PA0 的标准库初始化与校准超时处理，并保留 PC13 LED 闪烁验证程序。尚未实现 ADC 读取、电阻换算和自动量程。主机测试与交叉编译不等于已经上板验证测量精度。
 
-`main.c` 已迁入 `firmware/User/`，只组织时基启动、应用初始化和任务调用。ADC、LED 和时间服务分别在 `Driver`、`Interface`、`Common`；当前应用任务仍保留阻塞式亮 500ms、灭 500ms，不把目录整理当成非阻塞调度已完成。
+`main.c` 位于 `firmware/src/User/`，只组织时基启动、应用初始化和任务调用。ADC、LED 和时间服务分别在 `src/Driver`、`src/Interface`、`src/Common`；当前应用任务仍保留阻塞式亮 500ms、灭 500ms，不把目录整理当成非阻塞调度已完成。
 
 ---
 
 ## 12. 当前软件分层
 
+`firmware/` 管理完整固件工程；日常维护的项目源码集中在 `firmware/src/`。`src` 不是纯业务层，仍包含驱动、中断和硬件相关公共服务。
+
 | 目录 | 职责 |
 | --- | --- |
-| [Start](firmware/Start/README.md) | 启动/CMSIS 的统一构建入口、兼容处理和第三方源码导航 |
-| [User](firmware/User/README.md) | main、项目中断、标准库配置；不是全部业务代码的容器 |
-| `App` | 电阻测试仪初始化和任务组织；后续放测量调度与量程策略 |
-| `Driver` | ADC 等片内外设的标准库操作 |
-| `Interface` | LED 等具体硬件模块操作；后续再加入量程切换接口 |
-| `Common` | 毫秒时间服务等公共能力 |
+| [Start](firmware/Start/README.md) | 启动/CMSIS 的统一构建入口、兼容处理、链接脚本和第三方源码导航 |
+| [src/User](firmware/src/User/README.md) | main、项目中断、标准库配置；不是全部业务代码的容器 |
+| `src/App` | 电阻测试仪初始化和任务组织；后续放测量调度与量程策略 |
+| `src/Driver` | ADC 等片内外设的标准库操作 |
+| `src/Interface` | LED 等具体硬件模块操作；后续再加入量程切换接口 |
+| `src/Common` | 毫秒时间服务等公共能力 |
 | `Libraries` | 固定版本第三方标准库和 CMSIS 原始源码 |
 
-`Start` 已接入顶层 CMake，不是空目录。原厂启动和系统源码仍在 `Libraries`，不重复复制一套；原 `Core/Inc`、`Core/Src` 的五个项目文件原样迁入 `User`，不再保留旧目录。
+`Start` 已接入顶层 CMake，不是空目录。原厂启动和系统源码仍在 `Libraries`，不重复复制一套；原 `Core/Inc`、`Core/Src` 的五个项目文件现在位于 `src/User`，不再保留旧目录。此次只整理源码和链接脚本位置，项目 `.c/.h`、链接脚本内容及标准库版本不变。
 
 ```text
 main → Com_Time_Init → App_ResistorTester_Init
@@ -1015,33 +1017,37 @@ SysTick_Handler → Com_Time_Tick
 │   ├── software-layering.md
 │   └── cmsis-build-fix.md
 ├── firmware/
+│   ├── src/
+│   │   ├── App/
+│   │   ├── Driver/
+│   │   ├── Interface/
+│   │   ├── Common/
+│   │   └── User/
+│   │       ├── README.md
+│   │       ├── main.c
+│   │       ├── main.h
+│   │       ├── stm32f10x_it.c
+│   │       ├── stm32f10x_it.h
+│   │       └── stm32f10x_conf.h
 │   ├── Start/
 │   │   ├── README.md
 │   │   ├── startup.cmake
-│   │   └── cmsis-compat.cmake
-│   ├── User/
-│   │   ├── README.md
-│   │   ├── main.c
-│   │   ├── main.h
-│   │   ├── stm32f10x_it.c
-│   │   ├── stm32f10x_it.h
-│   │   └── stm32f10x_conf.h
-│   ├── App/
-│   ├── Driver/
-│   ├── Interface/
-│   ├── Common/
+│   │   ├── cmsis-compat.cmake
+│   │   └── STM32F103xx_FLASH.ld
 │   ├── Libraries/
 │   │   └── STM32F10x_StdPeriph_Lib/
 │   ├── cmake/
 │   │   └── gcc-arm-none-eabi.cmake
+│   ├── build/                       # 构建时生成，已被 Git 忽略
 │   ├── CMakeLists.txt
-│   ├── CMakePresets.json
-│   └── STM32F103xx_FLASH.ld
+│   └── CMakePresets.json
 ├── tests/
 │   ├── layering/
 │   └── check_cmsis_compat.py
 └── README.md
 ```
+
+构建入口保留在 `firmware/`，工具链和第三方依赖不搬进 `src/`。已有构建命令、预设和产物路径继续可用。
 
 ---
 
@@ -1067,7 +1073,7 @@ cmake --version
 ninja --version
 ```
 
-在仓库根目录构建；目录迁移后先重新配置，让编译数据库刷新为 User 路径：
+在仓库根目录构建；目录迁移后先重新配置，让编译数据库刷新为 `src/` 路径：
 
 ```bash
 cmake --preset Debug -S firmware &&
@@ -1083,4 +1089,4 @@ embed-2011G-SimpleAutomaticResistorTester.bin
 embed-2011G-SimpleAutomaticResistorTester.map
 ```
 
-Debug/Release 主机测试、完整固件构建和 Start/User 路径校验命令见 [软件分层说明](docs/software-layering.md)。
+Debug/Release 主机测试、完整固件构建和源码/启动支持路径校验命令见 [软件分层说明](docs/software-layering.md)。

@@ -6,22 +6,22 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 enable_testing()
-get_filename_component(FIRMWARE "${CMAKE_CURRENT_SOURCE_DIR}/../../firmware" ABSOLUTE)
+get_filename_component(FIRMWARE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../../firmware/src" ABSOLUTE)
 
 add_executable(test_modules
     test_modules.c
-    "${FIRMWARE}/App/App_ResistorTester.c"
-    "${FIRMWARE}/Driver/Driver_ADC.c"
-    "${FIRMWARE}/Interface/Interface_LED.c"
+    "${FIRMWARE_SRC}/App/App_ResistorTester.c"
+    "${FIRMWARE_SRC}/Driver/Driver_ADC.c"
+    "${FIRMWARE_SRC}/Interface/Interface_LED.c"
 )
 add_executable(test_time
     test_time.c
-    "${FIRMWARE}/User/stm32f10x_it.c"
+    "${FIRMWARE_SRC}/User/stm32f10x_it.c"
 )
 foreach(target test_modules test_time)
     target_include_directories(${target} PRIVATE
-        mocks "${FIRMWARE}/App" "${FIRMWARE}/Driver"
-        "${FIRMWARE}/Interface" "${FIRMWARE}/Common" "${FIRMWARE}/User"
+        mocks "${FIRMWARE_SRC}/App" "${FIRMWARE_SRC}/Driver"
+        "${FIRMWARE_SRC}/Interface" "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
     )
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)

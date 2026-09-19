@@ -3,7 +3,7 @@
 
 在 GNU 固件构建完成后运行：
     python3 tests/check_cmsis_compat.py firmware/build/Debug
-同时检查 Start/User 目录迁移后的实际编译单元；不代表 Cortex-M3 上板验证。
+同时检查 src/Start 目录布局及实际编译单元；不代表 Cortex-M3 上板验证。
 """
 import argparse
 import hashlib
@@ -58,15 +58,24 @@ def main() -> None:
 
     # 不能只看到文件夹就认为迁移完成：校验实际参与固件编译的来源与唯一性。
     firmware = root / "firmware"
+    project_source = firmware / "src"
     device = library / "Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x"
     require(not (firmware / "Core").exists(), "仍遗留旧 Core 目录")
+    for directory in ("App", "Driver", "Interface", "Common", "User"):
+        require((project_source / directory).is_dir(), "src 缺少 " + directory)
+        require(not (firmware / directory).exists(), "仍遗留 firmware 根目录下的 " + directory)
     for filename in ("main.c", "main.h", "stm32f10x_it.c", "stm32f10x_it.h", "stm32f10x_conf.h"):
-        require((firmware / "User" / filename).is_file(), "User 缺少 " + filename)
-    for filename in ("startup.cmake", "cmsis-compat.cmake"):
+        require((project_source / "User" / filename).is_file(), "src/User 缺少 " + filename)
+    for filename in ("startup.cmake", "cmsis-compat.cmake", "STM32F103xx_FLASH.ld"):
         require((firmware / "Start" / filename).is_file(), "Start 缺少 " + filename)
+    require(not (firmware / "STM32F103xx_FLASH.ld").exists(), "仍遗留 firmware 根目录下的链接脚本")
     expected_units = {
-        "main.c": firmware / "User/main.c",
-        "stm32f10x_it.c": firmware / "User/stm32f10x_it.c",
+        "main.c": project_source / "User/main.c",
+        "stm32f10x_it.c": project_source / "User/stm32f10x_it.c",
+        "App_ResistorTester.c": project_source / "App/App_ResistorTester.c",
+        "Driver_ADC.c": project_source / "Driver/Driver_ADC.c",
+        "Interface_LED.c": project_source / "Interface/Interface_LED.c",
+        "Com_Time.c": project_source / "Common/Com_Time.c",
         "system_stm32f10x.c": device / "system_stm32f10x.c",
         "startup_stm32f10x_md.s": device / "startup/TrueSTUDIO/startup_stm32f10x_md.s",
     }
@@ -87,7 +96,7 @@ def main() -> None:
         artifact = build / (project + suffix)
         require(artifact.is_file() and artifact.stat().st_size > 0, "缺少构建产物：" + str(artifact))
     print("PASS: original header hash, byte-identical restore, only three STREX edits, single core source, clean pinned submodule, BIN/HEX/MAP artifacts")
-    print("PASS: Start/User layout, unique main/ISR/system/GNU startup units, no legacy Core paths or host mocks")
+    print("PASS: src/Start layout, unique project/system/GNU startup units, no legacy source roots or host mocks")
 
 
 if __name__ == "__main__":

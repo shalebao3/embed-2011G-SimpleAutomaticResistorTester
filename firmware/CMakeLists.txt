@@ -40,7 +40,7 @@ add_library(stm32_stdperiph STATIC
 )
 
 target_include_directories(stm32_stdperiph PUBLIC
-    "${CMAKE_SOURCE_DIR}/User"
+    "${CMAKE_SOURCE_DIR}/src/User"
     "${STDPERIPH_DRIVER}/inc"
     ${STM32_STARTUP_INCLUDE_DIRS}
 )
@@ -58,21 +58,21 @@ target_compile_options(stm32_stdperiph PRIVATE
 )
 
 add_executable(${CMAKE_PROJECT_NAME}
-    User/main.c
-    User/stm32f10x_it.c
-    App/App_ResistorTester.c
-    Driver/Driver_ADC.c
-    Interface/Interface_LED.c
-    Common/Com_Time.c
+    src/User/main.c
+    src/User/stm32f10x_it.c
+    src/App/App_ResistorTester.c
+    src/Driver/Driver_ADC.c
+    src/Interface/Interface_LED.c
+    src/Common/Com_Time.c
     ${STM32_STARTUP_SOURCES}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    User
-    App
-    Driver
-    Interface
-    Common
+    src/User
+    src/App
+    src/Driver
+    src/Interface
+    src/Common
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
@@ -98,7 +98,7 @@ endif()
 
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     ${MCU_FLAGS}
-    "-T${CMAKE_SOURCE_DIR}/STM32F103xx_FLASH.ld"
+    "-T${CMAKE_SOURCE_DIR}/Start/STM32F103xx_FLASH.ld"
     --specs=nano.specs
     --specs=nosys.specs
     -Wl,--gc-sections
