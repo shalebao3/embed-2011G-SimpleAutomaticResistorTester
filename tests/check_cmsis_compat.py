@@ -61,7 +61,7 @@ def main() -> None:
     project_source = firmware / "src"
     device = library / "Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x"
     require(not (firmware / "Core").exists(), "仍遗留旧 Core 目录")
-    for directory in ("App", "Driver", "Interface", "Common", "User"):
+    for directory in ("App", "Driver", "Bsp", "Common", "User"):
         require((project_source / directory).is_dir(), "src 缺少 " + directory)
         require(not (firmware / directory).exists(), "仍遗留 firmware 根目录下的 " + directory)
     for filename in ("main.c", "main.h", "stm32f10x_it.c", "stm32f10x_it.h", "stm32f10x_conf.h"):
@@ -69,14 +69,16 @@ def main() -> None:
     for filename in ("startup.cmake", "cmsis-compat.cmake", "STM32F103xx_FLASH.ld"):
         require((firmware / "Start" / filename).is_file(), "Start 缺少 " + filename)
     require(not (firmware / "STM32F103xx_FLASH.ld").exists(), "仍遗留 firmware 根目录下的链接脚本")
-    for filename in ("Interface_LED.c", "Interface_LED.h"):
-        require(not (project_source / "Interface" / filename).exists(), "仍遗留已移除的 LED 示例：" + filename)
+    require(not (project_source / "Interface").exists(), "仍遗留旧 Interface 目录")
+    for filename in ("Interface_LED.c", "Interface_LED.h", "Bsp_LED.c", "Bsp_LED.h"):
+        require(not (project_source / "Bsp" / filename).exists(), "仍遗留已移除的 LED 示例：" + filename)
     require(not any(Path(entry["file"]).name == "Interface_LED.c" for entry in commands), "已移除的 LED 示例仍参与固件编译")
     expected_units = {
         "main.c": project_source / "User/main.c",
         "stm32f10x_it.c": project_source / "User/stm32f10x_it.c",
         "App_ResistorTester.c": project_source / "App/App_ResistorTester.c",
         "Driver_ADC.c": project_source / "Driver/Driver_ADC.c",
+        "bsp_Range.c": project_source / "Bsp/bsp_Range.c",
         "Com_Time.c": project_source / "Common/Com_Time.c",
         "system_stm32f10x.c": device / "system_stm32f10x.c",
         "startup_stm32f10x_md.s": device / "startup/TrueSTUDIO/startup_stm32f10x_md.s",
@@ -91,6 +93,7 @@ def main() -> None:
     for entry in commands:
         command = entry.get("command", " ".join(entry.get("arguments", [])))
         require("/Core/Inc" not in command and "/Core/Src" not in command, "编译命令仍引用旧 Core 路径")
+        require("/src/Interface" not in command, "编译命令仍引用旧 Interface 路径")
         require("tests/layering/mocks" not in command, "主机测试桩混入固件构建")
 
     project = "embed-2011G-SimpleAutomaticResistorTester"

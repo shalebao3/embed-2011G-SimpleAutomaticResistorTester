@@ -31,7 +31,7 @@ typedef struct
 } App_ResistorTesterMeasurement;
 
 /**
- * @brief 初始化量程控制与 ADC，并清空应用层测量状态。
+ * @brief 初始化BSP 量程控制与 ADC，并清空应用层测量状态。
  * @return SUCCESS：1kΩ 初始量程与 ADC 均初始化完成；ERROR：初始化失败。
  * @note 调用前必须完成 Com_Time_Init()，且保持中断开启。
  */
@@ -39,7 +39,7 @@ ErrorStatus App_ResistorTester_Init(void);
 
 /**
  * @brief 非阻塞应用任务：按固定周期触发一次 ADC 单次读取并换算电阻。
- * @note 当前启动时由 Interface_Range 真实选中 1kΩ 档（Rref=330Ω）。
+ * @note 当前启动时由 Bsp_Range 真实选中 1kΩ 档（Rref=330Ω）。
  *       程序仍只计算 recommended_range，不会自动执行换档；
  *       自动切换需要下一阶段加入稳定等待和状态同步。
  *       只能在初始化成功后的主循环调用，不能在中断中调用。

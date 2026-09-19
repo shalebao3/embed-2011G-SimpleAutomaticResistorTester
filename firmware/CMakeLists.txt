@@ -62,7 +62,7 @@ add_executable(${CMAKE_PROJECT_NAME}
     src/User/stm32f10x_it.c
     src/App/App_ResistorTester.c
     src/Driver/Driver_ADC.c
-    src/Interface/Interface_Range.c
+    src/Bsp/bsp_Range.c
     src/Common/Com_Time.c
     ${STM32_STARTUP_SOURCES}
 )
@@ -71,7 +71,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     src/User
     src/App
     src/Driver
-    src/Interface
+    src/Bsp
     src/Common
 )
 

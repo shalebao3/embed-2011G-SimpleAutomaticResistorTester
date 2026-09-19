@@ -1121,7 +1121,7 @@ Rref = 330Ω
 | [src/User](firmware/src/User/README.md) | main、项目中断、标准库配置；不是全部业务代码的容器 |
 | `src/App` | 电阻测试仪初始化和任务组织；后续放测量调度与量程策略 |
 | `src/Driver` | ADC 等片内外设的标准库操作 |
-| [src/Interface](firmware/src/Interface/README.md) | 预留具体硬件模块接口的目录约定；当前无编译源文件，后续按需加入量程切换接口 |
+| [src/Bsp](firmware/src/Bsp/README.md) | 板级支持层；当前包含三档量程 GPIO 控制 `bsp_Range.c/.h` |
 | `src/Common` | 毫秒时间服务等公共能力 |
 | `Libraries` | 固定版本第三方标准库和 CMSIS 原始源码 |
 
@@ -1147,7 +1147,7 @@ SysTick_Handler → Com_Time_Tick
 2. 设计量程枚举和配置表，让 App 能描述 100Ω / 1kΩ / 10kΩ 三个逻辑量程
 3. 实现纯软件“下一量程决策”逻辑并做主机测试，但在硬件接口完成前不允许真正改变有效 Rref
 4. 确定 GPIO → 驱动管 → 继电器的实际连接、引脚和安全默认状态
-5. 实现 `Interface_Range`，保证软件量程与真实继电器状态同步
+5. 实现 `Bsp_Range`，保证软件量程与真实继电器状态同步
 6. 加入换档稳定等待，再接通自动量程状态机
 7. 验证一次稳定测量更新小于 200ms
 8. 单独设计 10MΩ 高阻档前端
@@ -1171,7 +1171,7 @@ SysTick_Handler → Com_Time_Tick
 │   ├── src/
 │   │   ├── App/
 │   │   ├── Driver/
-│   │   ├── Interface/
+│   │   ├── Bsp/
 │   │   ├── Common/
 │   │   └── User/
 │   │       ├── README.md

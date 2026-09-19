@@ -10,7 +10,7 @@
 | [stm32f10x_it.h](stm32f10x_it.h) | 中断函数声明 |
 | [stm32f10x_conf.h](stm32f10x_conf.h) | 项目选择的标准外设库头文件和断言配置，不是第三方内核头文件 |
 
-不要把全部自定义代码重新堆进 User：ADC 在 `Driver`，时基在 `Common`，仪器业务在 `App`；这些项目源码目录均位于 `firmware/src/`。板载 LED 示例已移除，`Interface` 保留为后续具体硬件模块接口的目录约定。这里的“入口”不是说上电后 CPU 首先执行 main；复位和启动支持见 [Start](../../Start/README.md)。
+不要把全部自定义代码重新堆进 User：ADC 在 `Driver`，时基在 `Common`，仪器业务在 `App`；这些项目源码目录均位于 `firmware/src/`。板载 LED 示例已移除，`Bsp` 负责具体板级支持，当前包含量程 GPIO 控制。这里的“入口”不是说上电后 CPU 首先执行 main；复位和启动支持见 [Start](../../Start/README.md)。
 
 初始化顺序：
 

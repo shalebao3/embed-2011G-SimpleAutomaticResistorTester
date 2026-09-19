@@ -1,4 +1,4 @@
-#include "Interface_Range.h"
+#include "bsp_Range.h"
 
 /* 板级候选映射：避开 PA0 ADC 和默认 SWD 引脚；画板前仍可统一调整。 */
 #define RANGE_GPIO_PORT GPIOB
@@ -11,7 +11,7 @@
 /**
  * @brief 初始化三路量程控制输出；默认全部关闭。
  */
-void Interface_Range_Init(void)
+void Bsp_Range_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
@@ -33,21 +33,21 @@ void Interface_Range_Init(void)
 /**
  * @brief 先全断，再只接通目标量程一路。
  */
-ErrorStatus Interface_Range_Select(Interface_Range range)
+ErrorStatus Bsp_Range_Select(Bsp_Range range)
 {
     uint16_t selected_pin;
 
     switch (range)
     {
-        case INTERFACE_RANGE_100_OHM:
+        case BSP_RANGE_100_OHM:
             selected_pin = RANGE_100_OHM_PIN;
             break;
 
-        case INTERFACE_RANGE_1K_OHM:
+        case BSP_RANGE_1K_OHM:
             selected_pin = RANGE_1K_OHM_PIN;
             break;
 
-        case INTERFACE_RANGE_10K_OHM:
+        case BSP_RANGE_10K_OHM:
             selected_pin = RANGE_10K_OHM_PIN;
             break;
 
@@ -65,7 +65,7 @@ ErrorStatus Interface_Range_Select(Interface_Range range)
 /**
  * @brief 关闭全部量程控制输出。
  */
-void Interface_Range_DisableAll(void)
+void Bsp_Range_DisableAll(void)
 {
     GPIO_ResetBits(RANGE_GPIO_PORT, RANGE_ALL_PINS);
 }

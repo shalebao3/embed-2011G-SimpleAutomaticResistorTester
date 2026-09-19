@@ -12,7 +12,7 @@ add_executable(test_modules
     test_modules.c
     "${FIRMWARE_SRC}/App/App_ResistorTester.c"
     "${FIRMWARE_SRC}/Driver/Driver_ADC.c"
-    "${FIRMWARE_SRC}/Interface/Interface_Range.c"
+    "${FIRMWARE_SRC}/Bsp/bsp_Range.c"
 )
 add_executable(test_time
     test_time.c
@@ -21,7 +21,7 @@ add_executable(test_time
 foreach(target test_modules test_time)
     target_include_directories(${target} PRIVATE
         mocks "${FIRMWARE_SRC}/App" "${FIRMWARE_SRC}/Driver"
-        "${FIRMWARE_SRC}/Interface" "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
+        "${FIRMWARE_SRC}/Bsp" "${FIRMWARE_SRC}/Common" "${FIRMWARE_SRC}/User"
     )
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra -Werror -Wpedantic)

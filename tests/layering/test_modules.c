@@ -6,7 +6,7 @@
 #include <string.h>
 #include "App_ResistorTester.h"
 #include "Driver_ADC.h"
-#include "Interface_Range.h"
+#include "bsp_Range.h"
 #include "Com_Time.h"
 
 #define CHECK(expr) do { if (!(expr)) { \
@@ -184,13 +184,13 @@ uint16_t ADC_GetConversionValue(ADC_TypeDef *adc)
 }
 
 
-static void test_range_interface(const char *name)
+static void test_range_bsp(const char *name)
 {
     const int init_expected[] = {
         CLOCK_RANGE, RANGE_ALL_OFF, GPIO_DEFAULTS, RANGE_GPIO_OUTPUT
     };
 
-    Interface_Range_Init();
+    Bsp_Range_Init();
     expect_events(init_expected, sizeof(init_expected) / sizeof(init_expected[0]));
     event_count = 0U;
 
@@ -200,22 +200,22 @@ static void test_range_interface(const char *name)
 
     if (strcmp(name, "range_select_100") == 0) {
         const int expected[] = {RANGE_ALL_OFF, RANGE_SET_100};
-        CHECK(Interface_Range_Select(INTERFACE_RANGE_100_OHM) == SUCCESS);
+        CHECK(Bsp_Range_Select(BSP_RANGE_100_OHM) == SUCCESS);
         expect_events(expected, sizeof(expected) / sizeof(expected[0]));
     } else if (strcmp(name, "range_select_1k") == 0) {
         const int expected[] = {RANGE_ALL_OFF, RANGE_SET_1K};
-        CHECK(Interface_Range_Select(INTERFACE_RANGE_1K_OHM) == SUCCESS);
+        CHECK(Bsp_Range_Select(BSP_RANGE_1K_OHM) == SUCCESS);
         expect_events(expected, sizeof(expected) / sizeof(expected[0]));
     } else if (strcmp(name, "range_select_10k") == 0) {
         const int expected[] = {RANGE_ALL_OFF, RANGE_SET_10K};
-        CHECK(Interface_Range_Select(INTERFACE_RANGE_10K_OHM) == SUCCESS);
+        CHECK(Bsp_Range_Select(BSP_RANGE_10K_OHM) == SUCCESS);
         expect_events(expected, sizeof(expected) / sizeof(expected[0]));
     } else if (strcmp(name, "range_invalid") == 0) {
-        CHECK(Interface_Range_Select((Interface_Range)99) == ERROR);
+        CHECK(Bsp_Range_Select((Bsp_Range)99) == ERROR);
         CHECK(event_count == 0U);
     } else if (strcmp(name, "range_disable_all") == 0) {
         const int expected[] = {RANGE_ALL_OFF};
-        Interface_Range_DisableAll();
+        Bsp_Range_DisableAll();
         expect_events(expected, sizeof(expected) / sizeof(expected[0]));
     } else {
         CHECK(0);
@@ -380,7 +380,7 @@ int main(int argc, char **argv)
     CHECK(argc == 2);
     const char *name = argv[1];
     if (strncmp(name, "range_", 6U) == 0) {
-        test_range_interface(name);
+        test_range_bsp(name);
     } else if (strncmp(name, "read_", 5U) == 0) {
         test_read(name);
     } else if (strncmp(name, "measure_", 8U) == 0) {
