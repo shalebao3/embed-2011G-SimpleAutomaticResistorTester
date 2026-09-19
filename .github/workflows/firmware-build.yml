@@ -61,3 +61,5 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/firmware/cmake/gcc-arm-none-eabi.cmake"
       - name: Compile and link
         run: cmake --build firmware/build/${{ matrix.build_type }} --parallel 2
+      - name: Verify CMSIS restore and unchanged submodule
+        run: python3 tests/check_cmsis_compat.py firmware/build/${{ matrix.build_type }}
