@@ -1,5 +1,7 @@
 # 2011G 软件分层与回归验证
 
+> 构建状态更新（2026-09-19）：在 `refactor/app-driver-layering` 的修复提交 `479b723b4aa013972b1143a5018c37157fc68e3b` 上，GitHub Actions 的 Debug、Release 主机测试与完整 ARM 编译链接均已通过，CMSIS 来源/差异/产物/子模块不变性校验也已通过。[对应运行记录](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35441242606)。缺失文件来源和最小构建修复见 [CMSIS 构建修复说明](cmsis-build-fix.md)。尚未做真实上板验收，main 未修改。
+
 ## 改动范围
 
 业务代码基线为 `3a560d62d18681d53d8dc65e3baea5a19014146d`；复用现有分支中 `a949f7c737c7d1149a386caa7329d117fe0882f1` 的只读构建工作流并追加主机测试。做职责拆分时，参考 BalancingCar 的目录组织，但不复制其寄存器驱动、FreeRTOS、Keil 工程或业务代码。
@@ -18,7 +20,7 @@
 | `firmware/Core/Src/stm32f10x_it.c` | 保留唯一的中断入口；SysTick 只调用 Com_Time_Tick |
 | `tests/layering` | 独立主机回归测试，使用硬件接口替身，不进入固件编译 |
 
-同一模块的 `.c/.h` 放在一起；现有 `Core/Inc`、`Core/Src`、标准库子模块、启动代码和链接脚本的位置不变。CMake 只增加四个源文件和四个头文件搜索路径，固件编译参数不变。
+同一模块的 `.c/.h` 放在一起；现有 `Core/Inc`、`Core/Src`、标准库子模块、启动代码和链接脚本的位置不变。分层提交为 CMake 增加四个源文件和四个头文件搜索路径，固件编译参数不变；后续 CMSIS 构建兼容处理独立记录在 [构建修复说明](cmsis-build-fix.md)。
 
 ## 调用顺序
 
@@ -77,16 +79,18 @@ for config in Debug Release; do
 done
 ```
 
-云端工作流先执行主机测试，再执行 ARM 固件构建，使用只读仓库权限，不烧录、不部署、不提交代码，没有定时任务。
+云端工作流先执行主机测试，再执行 ARM 固件构建及 CMSIS 兼容副本校验，使用只读仓库权限，不烧录、不部署、不提交代码，没有定时任务。
 
-## 已确认的既有构建阻塞
+## 历史构建阻塞（已在分层分支修复）
 
 分层前的业务代码在 CI 提交 `a949f7c737c7d1149a386caa7329d117fe0882f1` 下已出现 Debug/Release 编译失败：[基线运行记录](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35435104761)。Debug 日志首先报 `core_cm3.h: No such file or directory`。固定子模块提交 `afa743577f2784e95be2d5003380fdb84a702519` 的 `Libraries/CMSIS/CM3/CoreSupport/` 只有 `core_cm3.c` 和 `core_cm3.h.old`，缺少正常文件名的 `core_cm3.h`。
 
-此次不重命名或修改标准库，不自动借用其他 CMSIS 版本，也不掩盖失败。主机测试通过仅说明被测模块在接口替身下满足回归用例，不能视为完整 ARM 固件构建通过。用户反馈的本地编译通过与干净检出的差异仍待核实，不能据此推断本地曾如何补文件。
+后续在 ElectronicsCompetition 找到同版本、同 Git blob SHA 的头文件，通过 CMake 在构建目录恢复完整文件；继续构建后发现的 GNU STREX 寄存器约束问题也只在生成副本中进行了三处最小修复。子模块原文件和提交保持不变，未借用新版 CMSIS。修复提交 `479b723b4aa013972b1143a5018c37157fc68e3b` 的 [Actions](https://github.com/shalebao3/embed-2011G-SimpleAutomaticResistorTester/actions/runs/35441242606) 已验证 Debug/Release 全部步骤成功。以上原始失败记录保留作根因证据，不再作为本分支当前阻塞。
+
+用户原先的本地编译为何通过仍未核实；本修复保证固定子模块的云端干净检出可构建，不据此推断或覆盖用户本地曾做过的修改。主机测试及构建成功不能代替上板测量。
 
 ## 上板验收与回滚
 
 主机测试和交叉编译均不能验证真实 ADC 校准、模拟电压、电阻精度或晶振是否正常。上板时至少检查：进入主循环而不是 Error_Handler；SysTick 每次仅更新一次计数；LED 仍亮 500ms、灭 500ms；ADC1 初始化返回 SUCCESS，参数与拆分前一致。
 
-改动在独立分支审查，未合并 main 时可直接切回 main。合入后如需撤回，用 `git revert` 撤销对应分层提交，避免 `reset --hard` 丢弃其他工作。此次不涉及数据库、生产部署或标准库更新。
+改动在独立分支审查，未合并 main 时可直接切回 main。合入后如需撤回，用 `git revert` 撤销对应分层或构建修复提交，避免 `reset --hard` 丢弃其他工作。此次不涉及数据库、生产部署或标准库子模块更新。
