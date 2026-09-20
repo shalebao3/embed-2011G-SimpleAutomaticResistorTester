@@ -300,6 +300,7 @@ static void test_read(const char *name)
 static void complete_range_switch(
     App_ResistorTesterRange expected_range,
     uint32_t expected_rref,
+    uint32_t expected_resistance_ohm,
     int expected_set_event)
 {
     App_ResistorTesterMeasurement measurement;
@@ -340,7 +341,11 @@ static void complete_range_switch(
     CHECK(measurement.active_range == expected_range);
     CHECK(measurement.recommended_range == expected_range);
     CHECK(measurement.reference_resistor_ohm == expected_rref);
-    CHECK(measurement.resistance_ohm == expected_rref);
+    /*
+     * 4095 为奇数，12 位 ADC 不存在精确 50% 的整数码。
+     * 因此 raw=2048 时，大阻值档经整数四舍五入后不一定恰好等于 Rref。
+     */
+    CHECK(measurement.resistance_ohm == expected_resistance_ohm);
 }
 
 static void test_app_measurement(const char *name)
@@ -398,6 +403,7 @@ static void test_app_measurement(const char *name)
         complete_range_switch(
             APP_RESISTOR_RANGE_100_OHM,
             33U,
+            33U,
             RANGE_SET_100);
         return;
     }
@@ -411,6 +417,7 @@ static void test_app_measurement(const char *name)
         complete_range_switch(
             APP_RESISTOR_RANGE_10K_OHM,
             3300U,
+            3302U,
             RANGE_SET_10K);
         return;
     }
