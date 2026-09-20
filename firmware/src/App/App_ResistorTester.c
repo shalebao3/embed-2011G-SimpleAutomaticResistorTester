@@ -21,6 +21,24 @@
 #define APP_RANGE_RELEASE_WAIT_MS 10U
 #define APP_RANGE_SETTLE_WAIT_MS 20U
 
+/*
+ * 原题要求测量速度 >5 次/s，即稳定结果更新周期必须严格小于 200ms。
+ * 三个自动量程之间最多跨两档；以下预算按每次 ADC 都接近驱动超时上限计算，
+ * 因而是明显保守于真实 ADC 转换时间的软件上界。
+ */
+#define APP_REQUIREMENT_MAX_UPDATE_MS 200U
+#define APP_MAX_AUTO_RANGE_TRANSITIONS 2U
+#define APP_WORST_CASE_UPDATE_BUDGET_MS \
+    (APP_SAMPLE_INTERVAL_MS + \
+     (APP_MAX_AUTO_RANGE_TRANSITIONS * \
+      (APP_RANGE_RELEASE_WAIT_MS + APP_RANGE_SETTLE_WAIT_MS)) + \
+     ((APP_MAX_AUTO_RANGE_TRANSITIONS + 1U) * \
+      DRIVER_ADC1_READ_TIMEOUT_MS))
+
+_Static_assert(
+    APP_WORST_CASE_UPDATE_BUDGET_MS < APP_REQUIREMENT_MAX_UPDATE_MS,
+    "Automatic range timing budget must stay below 200ms");
+
 /**
  * @brief 一个量程当前最小的软件配置。
  */

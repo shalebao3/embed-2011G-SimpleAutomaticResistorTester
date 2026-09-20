@@ -5,9 +5,6 @@
 /* 校准超时保护值，保持原程序的 10ms，不是 ADC 硬件转换时间。 */
 #define ADC_CAL_TIMEOUT_MS 10U
 
-/* 单次读取的异常等待上限，不是每次采样固定等待 10ms。 */
-#define ADC_READ_TIMEOUT_MS 10U
-
 /* 仅表示本驱动已完成初始化，不是并发锁或硬件就绪寄存器。 */
 static FunctionalState s_adc1_ready = DISABLE;
 
@@ -122,7 +119,7 @@ ErrorStatus Driver_ADC1_ReadRaw(uint16_t *raw)
     /* EOC = End Of Conversion；硬件完成后置位，不需要开启 ADC 中断。 */
     while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET)
     {
-        if ((uint32_t)(Com_Time_GetMs() - start_ms) >= ADC_READ_TIMEOUT_MS)
+        if ((uint32_t)(Com_Time_GetMs() - start_ms) >= DRIVER_ADC1_READ_TIMEOUT_MS)
         {
             /* 终止异常转换，不让后续调用误取迟到的旧结果。 */
             ADC_Cmd(ADC1, DISABLE);

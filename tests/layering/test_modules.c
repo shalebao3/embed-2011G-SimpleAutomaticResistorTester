@@ -370,6 +370,71 @@ static void complete_initial_settle(void)
     event_count = 0U;
 }
 
+static void test_two_switch_timing_budget(void)
+{
+    App_ResistorTesterMeasurement measurement;
+    uint32_t start_ms;
+
+    /*
+     * 先把系统从初始 1kΩ 档降到 100Ω 档，建立一个有效结果作为计时起点。
+     * 这一段只做测试准备，不计入“上一个有效结果 → 新有效结果”的预算。
+     */
+    conversion_input = 500U;
+    event_count = 0U;
+    App_ResistorTester_Task();
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+    complete_range_switch(
+        APP_RESISTOR_RANGE_100_OHM,
+        33U,
+        33U,
+        RANGE_SET_100);
+
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
+    CHECK(measurement.active_range == APP_RESISTOR_RANGE_100_OHM);
+
+    /*
+     * 模拟 ADC 成功但已经很接近 10ms 超时上限。
+     * mock 中 ready_after=9 会让一次成功读取消耗接近完整驱动等待预算。
+     */
+    ready_after = 9U;
+    start_ms = now_ms;
+
+    /* 最坏情况先等满 100ms，下一次周期采样才发现阻值已经剧烈变大。 */
+    now_ms += 100U;
+    conversion_input = 4094U;
+    event_count = 0U;
+    App_ResistorTester_Task(); /* 100Ω → 请求 1kΩ */
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    now_ms += 10U;
+    App_ResistorTester_Task(); /* 释放完成，接通 1kΩ */
+    now_ms += 20U;
+    App_ResistorTester_Task(); /* 1kΩ 稳定，提交 active_range */
+
+    conversion_input = 4094U;
+    App_ResistorTester_Task(); /* 1kΩ 仍偏高 → 请求 10kΩ */
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    now_ms += 10U;
+    App_ResistorTester_Task(); /* 释放完成，接通 10kΩ */
+    now_ms += 20U;
+    App_ResistorTester_Task(); /* 10kΩ 稳定，提交 active_range */
+
+    conversion_input = 2048U;
+    App_ResistorTester_Task(); /* 10kΩ 档最终稳定有效结果 */
+
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
+    CHECK(measurement.status == APP_MEASUREMENT_STATUS_VALID);
+    CHECK(measurement.active_range == APP_RESISTOR_RANGE_10K_OHM);
+    CHECK(measurement.reference_resistor_ohm == 3300U);
+
+    /*
+     * 原题 >5 次/s 等价于更新周期必须严格小于 200ms。
+     * 当前 mock 的保守慢 ADC + 两次完整换档路径仍应满足。
+     */
+    CHECK((uint32_t)(now_ms - start_ms) < 200U);
+}
+
 static void test_app_measurement(const char *name)
 {
     App_ResistorTesterMeasurement measurement = {
@@ -383,6 +448,11 @@ static void test_app_measurement(const char *name)
 
     CHECK(App_ResistorTester_Init() == SUCCESS);
     complete_initial_settle();
+
+    if (strcmp(name, "measure_two_switch_budget") == 0) {
+        test_two_switch_timing_budget();
+        return;
+    }
 
     if (strcmp(name, "measure_get_before_sample") == 0) {
         CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);

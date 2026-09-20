@@ -3,6 +3,12 @@
 
 #include "stm32f10x.h"
 
+/*
+ * 单次 ADC 读取允许等待 EOC 的异常上限。
+ * 这是上层做整机时间预算时可依赖的驱动契约，不代表一次正常 ADC 转换固定耗时 10ms。
+ */
+#define DRIVER_ADC1_READ_TIMEOUT_MS 10U
+
 /**
  * @brief 初始化 ADC1：PA0/通道0、规则组单通道、单次转换、软件触发。
  * @return SUCCESS：校准完成；ERROR：校准阶段等待超时，ADC 已关闭。
