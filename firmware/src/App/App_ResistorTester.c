@@ -102,8 +102,8 @@ static ErrorStatus App_ResistorTester_ConvertRaw(
     uint32_t reference_resistor_ohm,
     uint32_t *resistance_ohm)
 {
-    uint32_t denominator;
-    uint64_t numerator;
+    uint32_t denominator;  // 分母，计算时必须使用 32 位整数避免溢出
+    uint64_t numerator;  // 分子，计算时必须使用 64 位整数避免溢出
 
     if ((resistance_ohm == NULL) ||
         (reference_resistor_ohm == 0U) ||
@@ -135,7 +135,7 @@ static App_ResistorTesterRange App_ResistorTester_RecommendRange(
     {
         return (App_ResistorTesterRange)((uint32_t)current_range - 1U);
     }
-
+    
     if ((raw > APP_RANGE_HIGH_THRESHOLD) &&
         (current_range < APP_RESISTOR_RANGE_10K_OHM))
     {
@@ -146,7 +146,10 @@ static App_ResistorTesterRange App_ResistorTester_RecommendRange(
 }
 
 /**
- * @brief 将 App 的逻辑量程映射到 BSP 量程。
+ * @brief 将 板级 BSP 量程映射为 App 逻辑量程。
+ * @param app_range 期望的 App 逻辑量程。
+ * @param bsp_range 输出的 BSP 量程。
+ * @return SUCCESS：映射成功；ERROR：参数无效。
  */
 static ErrorStatus App_ResistorTester_MapRangeToBsp(
     App_ResistorTesterRange app_range,
@@ -177,7 +180,7 @@ static ErrorStatus App_ResistorTester_MapRangeToBsp(
 }
 
 /**
- * @brief 进入不可恢复的软件故障状态，并确保所有量程输出关闭。
+ * @brief 系统进入不可继续工作的状态，先把硬件切到安全状态，再更新软件状态
  */
 static void App_ResistorTester_EnterFault(void)
 {
@@ -194,9 +197,9 @@ ErrorStatus App_ResistorTester_Init(void)
 {
     Bsp_Range bsp_range;
 
-    s_active_range = APP_RESISTOR_RANGE_1K_OHM;
-    s_pending_range = s_active_range;
-    s_state = APP_STATE_MEASURE;
+    s_active_range = APP_RESISTOR_RANGE_1K_OHM;  // 1kΩ 档为默认初始档
+    s_pending_range = s_active_range;  
+    s_state = APP_STATE_MEASURE;  // 初始态为测量态，后续会在 Task 中进入换档等待
     s_state_started_ms = 0U;
 
     s_result_available = DISABLE;

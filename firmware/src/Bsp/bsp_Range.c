@@ -6,7 +6,7 @@
 #define RANGE_1K_OHM_PIN GPIO_Pin_13
 #define RANGE_10K_OHM_PIN GPIO_Pin_14
 #define RANGE_ALL_PINS \
-    (RANGE_100_OHM_PIN | RANGE_1K_OHM_PIN | RANGE_10K_OHM_PIN)
+    (RANGE_100_OHM_PIN | RANGE_1K_OHM_PIN | RANGE_10K_OHM_PIN)   //  \ 续行符
 
 /**
  * @brief 初始化三路量程控制输出；默认全部关闭。
