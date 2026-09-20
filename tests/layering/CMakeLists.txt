@@ -48,7 +48,8 @@ endforeach()
 foreach(case measure_get_before_sample measure_midscale measure_interval
              measure_keep_low_boundary measure_keep_high_boundary
              measure_switch_lower measure_switch_higher
-             measure_fullscale_invalid measure_read_error_invalid)
+             measure_fullscale_switch_higher measure_high_range_required
+             measure_read_error_invalid)
     add_test(NAME ${case} COMMAND test_modules ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 5)
 endforeach()

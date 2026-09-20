@@ -17,9 +17,21 @@ typedef enum
 } App_ResistorTesterRange;      // 枚举规则：0 表示 100 Ω，1 表示 1K Ω，2 表示 10K Ω，3 表示无效。
 
 /**
- * @brief 最近一次有效测量结果。
- * @note active_range 表示本次换算实际采用的量程；
- *       recommended_range 只表示下一步量程建议，不代表硬件已经切换。
+ * @brief 一次测量结果的业务状态。
+ */
+typedef enum
+{
+    APP_MEASUREMENT_STATUS_UNAVAILABLE = 0,
+    APP_MEASUREMENT_STATUS_VALID,
+    APP_MEASUREMENT_STATUS_HIGH_RANGE_REQUIRED
+} App_ResistorTesterMeasurementStatus;
+
+/**
+ * @brief 最近一次可用的测量/量程状态结果。
+ * @note active_range 表示本次结果对应的真实量程；
+ *       recommended_range 表示自动量程建议。
+ *       当 status=APP_MEASUREMENT_STATUS_HIGH_RANGE_REQUIRED 时，
+ *       resistance_ohm 不代表有效阻值，当前固定为 0。
  */
 typedef struct
 {
@@ -28,6 +40,7 @@ typedef struct
     uint32_t reference_resistor_ohm;        /* 本次换算使用的参考电阻，单位 Ω。 */
     App_ResistorTesterRange active_range;   /* 本次实际采用的逻辑量程。 */
     App_ResistorTesterRange recommended_range; /* 根据 ADC 阈值给出的下一量程建议。 */
+    App_ResistorTesterMeasurementStatus status; /* 有效阻值或需要高阻档。 */
 } App_ResistorTesterMeasurement;
 
 /**
@@ -47,9 +60,11 @@ ErrorStatus App_ResistorTester_Init(void);
 void App_ResistorTester_Task(void);
 
 /**
- * @brief 获取最近一次有效测量结果。
+ * @brief 获取最近一次可用结果。
  * @param measurement 输出地址；仅 SUCCESS 时写入。
- * @return SUCCESS：存在有效结果；ERROR：空指针、尚未采样或最近一次测量失败。
+ * @return SUCCESS：存在新的测量/量程状态结果；ERROR：空指针、尚未采样、
+ *         换档中或最近一次采样失败。
+ * @note status=APP_MEASUREMENT_STATUS_VALID 时 resistance_ohm 才是有效阻值。
  */
 ErrorStatus App_ResistorTester_GetLatestMeasurement(
     App_ResistorTesterMeasurement *measurement);

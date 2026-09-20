@@ -341,11 +341,33 @@ static void complete_range_switch(
     CHECK(measurement.active_range == expected_range);
     CHECK(measurement.recommended_range == expected_range);
     CHECK(measurement.reference_resistor_ohm == expected_rref);
+    CHECK(measurement.status == APP_MEASUREMENT_STATUS_VALID);
     /*
      * 4095 为奇数，12 位 ADC 不存在精确 50% 的整数码。
      * 因此 raw=2048 时，大阻值档经整数四舍五入后不一定恰好等于 Rref。
      */
     CHECK(measurement.resistance_ohm == expected_resistance_ohm);
+}
+
+static void complete_initial_settle(void)
+{
+    App_ResistorTesterMeasurement measurement;
+
+    /* 初始 1kΩ 继电器刚接通，不能立刻 ADC。 */
+    event_count = 0U;
+    App_ResistorTester_Task();
+    CHECK(event_count == 0U);
+    CHECK(conversion_starts == 0U);
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    /* 20ms 稳定等待结束的这一轮只提交状态，不采样。 */
+    now_ms += 20U;
+    App_ResistorTester_Task();
+    CHECK(event_count == 0U);
+    CHECK(conversion_starts == 0U);
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    event_count = 0U;
 }
 
 static void test_app_measurement(const char *name)
@@ -355,11 +377,12 @@ static void test_app_measurement(const char *name)
         0x55555555U,
         0x33333333U,
         APP_RESISTOR_RANGE_100_OHM,
-        APP_RESISTOR_RANGE_10K_OHM
+        APP_RESISTOR_RANGE_10K_OHM,
+        APP_MEASUREMENT_STATUS_HIGH_RANGE_REQUIRED
     };
 
     CHECK(App_ResistorTester_Init() == SUCCESS);
-    event_count = 0U;
+    complete_initial_settle();
 
     if (strcmp(name, "measure_get_before_sample") == 0) {
         CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
@@ -367,7 +390,8 @@ static void test_app_measurement(const char *name)
               measurement.resistance_ohm == 0x55555555U &&
               measurement.reference_resistor_ohm == 0x33333333U &&
               measurement.active_range == APP_RESISTOR_RANGE_100_OHM &&
-              measurement.recommended_range == APP_RESISTOR_RANGE_10K_OHM);
+              measurement.recommended_range == APP_RESISTOR_RANGE_10K_OHM &&
+              measurement.status == APP_MEASUREMENT_STATUS_HIGH_RANGE_REQUIRED);
         CHECK(App_ResistorTester_GetLatestMeasurement(NULL) == ERROR);
         CHECK(conversion_starts == 0U);
         return;
@@ -377,16 +401,11 @@ static void test_app_measurement(const char *name)
     if (strcmp(name, "measure_keep_high_boundary") == 0) { conversion_input = 3072U; }
     if (strcmp(name, "measure_switch_lower") == 0) { conversion_input = 500U; }
     if (strcmp(name, "measure_switch_higher") == 0) { conversion_input = 3500U; }
-    if (strcmp(name, "measure_fullscale_invalid") == 0) { conversion_input = 4095U; }
+    if (strcmp(name, "measure_fullscale_switch_higher") == 0) { conversion_input = 4095U; }
+    if (strcmp(name, "measure_high_range_required") == 0) { conversion_input = 3500U; }
     if (strcmp(name, "measure_read_error_invalid") == 0) { read_stuck = 1; }
 
     App_ResistorTester_Task();
-
-    if (strcmp(name, "measure_fullscale_invalid") == 0) {
-        CHECK(conversion_starts == 1U && adc_enabled);
-        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
-        return;
-    }
 
     if (strcmp(name, "measure_read_error_invalid") == 0) {
         CHECK(conversion_starts == 1U && !adc_enabled);
@@ -408,7 +427,9 @@ static void test_app_measurement(const char *name)
         return;
     }
 
-    if (strcmp(name, "measure_switch_higher") == 0) {
+    if ((strcmp(name, "measure_switch_higher") == 0) ||
+        (strcmp(name, "measure_fullscale_switch_higher") == 0) ||
+        (strcmp(name, "measure_high_range_required") == 0)) {
         const int expected[] = {
             EOC_CLEAR, CONVERSION_START, CONVERSION_READ, RANGE_ALL_OFF
         };
@@ -419,6 +440,21 @@ static void test_app_measurement(const char *name)
             3300U,
             3302U,
             RANGE_SET_10K);
+
+        if (strcmp(name, "measure_high_range_required") == 0) {
+            now_ms += 100U;
+            conversion_input = 4095U;
+            event_count = 0U;
+            App_ResistorTester_Task();
+            CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
+            CHECK(measurement.status == APP_MEASUREMENT_STATUS_HIGH_RANGE_REQUIRED);
+            CHECK(measurement.adc_raw == 4095U);
+            CHECK(measurement.active_range == APP_RESISTOR_RANGE_10K_OHM);
+            CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_10K_OHM);
+            CHECK(measurement.reference_resistor_ohm == 3300U);
+            CHECK(measurement.resistance_ohm == 0U);
+            CHECK(event_count == 3U);
+        }
         return;
     }
 
@@ -427,6 +463,7 @@ static void test_app_measurement(const char *name)
     CHECK(measurement.reference_resistor_ohm == 330U);
     CHECK(measurement.active_range == APP_RESISTOR_RANGE_1K_OHM);
     CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_1K_OHM);
+    CHECK(measurement.status == APP_MEASUREMENT_STATUS_VALID);
 
     if (strcmp(name, "measure_midscale") == 0) {
         CHECK(measurement.resistance_ohm == 330U);
