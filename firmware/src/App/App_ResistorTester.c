@@ -195,7 +195,7 @@ static void App_ResistorTester_EnterFault(void)
  */
 ErrorStatus App_ResistorTester_Init(void)
 {
-    Bsp_Range bsp_range;
+    Bsp_Range bsp_range; // 临时接住：App_ResistorTester_MapRangeToBsp(...)转换出来的 BSP 量程
 
     s_active_range = APP_RESISTOR_RANGE_1K_OHM;  // 1kΩ 档为默认初始档
     s_pending_range = s_active_range;  
@@ -212,12 +212,12 @@ ErrorStatus App_ResistorTester_Init(void)
     s_latest_measurement.recommended_range = s_active_range;
     s_latest_measurement.status = APP_MEASUREMENT_STATUS_UNAVAILABLE;
 
-    Bsp_Range_Init();
+    Bsp_Range_Init(); 
 
     if ((App_ResistorTester_MapRangeToBsp(
-             s_active_range,
-             &bsp_range) != SUCCESS) ||
-        (Bsp_Range_Select(bsp_range) != SUCCESS))
+                 s_active_range,
+                 &bsp_range) != SUCCESS) ||
+            (Bsp_Range_Select(bsp_range) != SUCCESS))
     {
         App_ResistorTester_EnterFault();
         return ERROR;
