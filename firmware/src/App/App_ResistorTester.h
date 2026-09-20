@@ -40,8 +40,8 @@ ErrorStatus App_ResistorTester_Init(void);
 /**
  * @brief 非阻塞应用任务：按固定周期触发一次 ADC 单次读取并换算电阻。
  * @note 当前启动时由 Bsp_Range 真实选中 1kΩ 档（Rref=330Ω）。
- *       程序仍只计算 recommended_range，不会自动执行换档；
- *       自动切换需要下一阶段加入稳定等待和状态同步。
+ *       运行中会按“全断 → 释放等待 → 新档接通 → 稳定等待 → 重测”自动换档。
+ *       换档期间测量结果无效；等待时间当前仍是软件验证临时值。
  *       只能在初始化成功后的主循环调用，不能在中断中调用。
  */
 void App_ResistorTester_Task(void);

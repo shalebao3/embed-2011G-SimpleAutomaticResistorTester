@@ -14,35 +14,56 @@
 #define APP_RANGE_LOW_THRESHOLD 819U
 #define APP_RANGE_HIGH_THRESHOLD 3072U
 
+/*
+ * 继电器换档的临时软件验证值。
+ * 最终必须根据继电器 datasheet 的释放/动作/回跳时间与测量节点 RC 重新确定。
+ */
+#define APP_RANGE_RELEASE_WAIT_MS 10U
+#define APP_RANGE_SETTLE_WAIT_MS 20U
+
 /**
  * @brief 一个量程当前最小的软件配置。
- * @note 暂时只有参考电阻参数；GPIO/继电器控制尚未接入。
  */
 typedef struct
 {
     uint32_t reference_resistor_ohm;
 } App_ResistorTesterRangeConfig;
 
+/**
+ * @brief 非阻塞自动量程状态。
+ */
+typedef enum
+{
+    APP_STATE_MEASURE = 0,
+    APP_STATE_RANGE_RELEASE_WAIT,
+    APP_STATE_RANGE_SETTLE_WAIT,
+    APP_STATE_FAULT
+} App_ResistorTesterState;
+
 /*
  * 前三档当前理论候选值。
  * 33Ω / 330Ω / 3.3kΩ 仍需结合真实硬件误差预算后再定 BOM。
  */
 static const App_ResistorTesterRangeConfig s_range_configs[APP_RESISTOR_RANGE_COUNT] =
-    {
-        [APP_RESISTOR_RANGE_100_OHM] = {33U},
-        [APP_RESISTOR_RANGE_1K_OHM] = {330U},
-        [APP_RESISTOR_RANGE_10K_OHM] = {3300U} 
-        // 等价于下面的写法，但更清晰：
-        // s_range_configs[0].reference_resistor_ohm = 33;
-        // s_range_configs[1].reference_resistor_ohm = 330;
-        // s_range_configs[2].reference_resistor_ohm = 3300;
+{
+    [APP_RESISTOR_RANGE_100_OHM] = {33U},
+    [APP_RESISTOR_RANGE_1K_OHM] = {330U},
+    [APP_RESISTOR_RANGE_10K_OHM] = {3300U}
+    /* 等价于：
+     * s_range_configs[0].reference_resistor_ohm = 33;
+     * s_range_configs[1].reference_resistor_ohm = 330;
+     * s_range_configs[2].reference_resistor_ohm = 3300;
+     */
 };
 
 /*
- * 启动阶段会让 Bsp_Range 同步选中 1kΩ 档。
- * 自动切换尚未接通，因此运行期间仍固定保持该量程。
+ * active_range 只表示“已经完成稳定等待、可以用于 ADC 换算”的真实量程。
+ * pending_range 表示换档过程中即将接通的目标量程。
  */
-static const App_ResistorTesterRange s_active_range = APP_RESISTOR_RANGE_1K_OHM;
+static App_ResistorTesterRange s_active_range = APP_RESISTOR_RANGE_1K_OHM;
+static App_ResistorTesterRange s_pending_range = APP_RESISTOR_RANGE_1K_OHM;
+static App_ResistorTesterState s_state = APP_STATE_MEASURE;
+static uint32_t s_state_started_ms = 0U;
 
 static App_ResistorTesterMeasurement s_latest_measurement;
 static FunctionalState s_measurement_valid = DISABLE;
@@ -85,8 +106,7 @@ static ErrorStatus App_ResistorTester_ConvertRaw(
 }
 
 /**
- * @brief 只根据当前量程与 ADC 值给出下一量程建议。
- * @note 这是纯软件决策，不操作 GPIO，也不改变真实有效量程。
+ * @brief 根据当前量程与 ADC 值给出下一量程建议。
  */
 static App_ResistorTesterRange App_ResistorTester_RecommendRange(
     App_ResistorTesterRange current_range,
@@ -108,7 +128,7 @@ static App_ResistorTesterRange App_ResistorTester_RecommendRange(
 }
 
 /**
- * @brief 将 App 的逻辑量程映射到BSP 量程。
+ * @brief 将 App 的逻辑量程映射到 BSP 量程。
  */
 static ErrorStatus App_ResistorTester_MapRangeToBsp(
     App_ResistorTesterRange app_range,
@@ -139,18 +159,33 @@ static ErrorStatus App_ResistorTester_MapRangeToBsp(
 }
 
 /**
- * @brief 初始化仪器BSP 量程控制与 ADC；时间基准由 main 提前建立。
+ * @brief 进入不可恢复的软件故障状态，并确保所有量程输出关闭。
+ */
+static void App_ResistorTester_EnterFault(void)
+{
+    Bsp_Range_DisableAll();
+    s_measurement_valid = DISABLE;
+    s_state = APP_STATE_FAULT;
+}
+
+/**
+ * @brief 初始化 BSP 量程控制与 ADC；时间基准由 main 提前建立。
  */
 ErrorStatus App_ResistorTester_Init(void)
 {
+    Bsp_Range bsp_range;
+
+    s_active_range = APP_RESISTOR_RANGE_1K_OHM;
+    s_pending_range = s_active_range;
+    s_state = APP_STATE_MEASURE;
+    s_state_started_ms = 0U;
+
     s_measurement_valid = DISABLE;
     s_sample_started = DISABLE;
     s_last_sample_ms = 0U;
     s_latest_measurement.adc_raw = 0U;
     s_latest_measurement.resistance_ohm = 0U;
     s_latest_measurement.reference_resistor_ohm = 0U;
-    Bsp_Range bsp_range;
-
     s_latest_measurement.active_range = s_active_range;
     s_latest_measurement.recommended_range = s_active_range;
 
@@ -161,14 +196,14 @@ ErrorStatus App_ResistorTester_Init(void)
              &bsp_range) != SUCCESS) ||
         (Bsp_Range_Select(bsp_range) != SUCCESS))
     {
-        Bsp_Range_DisableAll();
+        App_ResistorTester_EnterFault();
         return ERROR;
     }
 
     if (Driver_ADC1_Init() != SUCCESS)
     {
         /* ADC 无法工作时，不让继电器继续保持吸合。 */
-        Bsp_Range_DisableAll();
+        App_ResistorTester_EnterFault();
         return ERROR;
     }
 
@@ -176,15 +211,79 @@ ErrorStatus App_ResistorTester_Init(void)
 }
 
 /**
- * @brief 按 100ms 周期完成一次“ADC 原始值 -> 单档电阻值”更新。
+ * @brief 推进非阻塞自动换档状态机。
+ * @param now_ms 当前毫秒时基。
+ * @return ENABLE：本轮已经由状态机处理，应立即返回；DISABLE：可以继续测量。
+ */
+static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
+{
+    Bsp_Range bsp_range;
+
+    if (s_state == APP_STATE_FAULT)
+    {
+        return ENABLE;
+    }
+
+    if (s_state == APP_STATE_RANGE_RELEASE_WAIT)
+    {
+        if ((uint32_t)(now_ms - s_state_started_ms) < APP_RANGE_RELEASE_WAIT_MS)
+        {
+            return ENABLE;
+        }
+
+        if ((App_ResistorTester_MapRangeToBsp(
+                 s_pending_range,
+                 &bsp_range) != SUCCESS) ||
+            (Bsp_Range_Select(bsp_range) != SUCCESS))
+        {
+            App_ResistorTester_EnterFault();
+            return ENABLE;
+        }
+
+        s_state = APP_STATE_RANGE_SETTLE_WAIT;
+        s_state_started_ms = Com_Time_GetMs();
+        return ENABLE;
+    }
+
+    if (s_state == APP_STATE_RANGE_SETTLE_WAIT)
+    {
+        if ((uint32_t)(now_ms - s_state_started_ms) < APP_RANGE_SETTLE_WAIT_MS)
+        {
+            return ENABLE;
+        }
+
+        /*
+         * 到这里才认为新量程已经稳定。
+         * 因此 active_range 永远不提前于真实硬件稳定状态。
+         */
+        s_active_range = s_pending_range;
+        s_latest_measurement.active_range = s_active_range;
+        s_latest_measurement.recommended_range = s_active_range;
+        s_sample_started = DISABLE;
+        s_state = APP_STATE_MEASURE;
+        return ENABLE;
+    }
+
+    return DISABLE;
+}
+
+/**
+ * @brief 按 100ms 周期完成测量，并在需要时启动非阻塞自动换档。
  */
 void App_ResistorTester_Task(void)
 {
     uint16_t raw;
     uint32_t resistance_ohm;
+    App_ResistorTesterRange recommended_range;
     const uint32_t now_ms = Com_Time_GetMs();
-    const App_ResistorTesterRangeConfig *range_config =
-        &s_range_configs[s_active_range];
+    const App_ResistorTesterRangeConfig *range_config;
+
+    if (App_ResistorTester_ProcessRangeState(now_ms) == ENABLE)
+    {
+        return;
+    }
+
+    range_config = &s_range_configs[s_active_range];
 
     /* 采样节奏按“开始到开始”计算，若距离上次采样未满 100ms，则直接返回。 */
     if ((s_sample_started == ENABLE) &&
@@ -212,13 +311,30 @@ void App_ResistorTester_Task(void)
         return;
     }
 
+    recommended_range =
+        App_ResistorTester_RecommendRange(s_active_range, raw);
+
     s_latest_measurement.adc_raw = raw;
     s_latest_measurement.resistance_ohm = resistance_ohm;
     s_latest_measurement.reference_resistor_ohm =
         range_config->reference_resistor_ohm;
     s_latest_measurement.active_range = s_active_range;
-    s_latest_measurement.recommended_range =
-        App_ResistorTester_RecommendRange(s_active_range, raw);
+    s_latest_measurement.recommended_range = recommended_range;
+
+    if (recommended_range != s_active_range)
+    {
+        /*
+         * 当前结果落在换档区间：立即停止对外提供它，并先释放全部继电器。
+         * 下一档真正接通、稳定并重新采样成功前，measurement 始终无效。
+         */
+        s_measurement_valid = DISABLE;
+        s_pending_range = recommended_range;
+        Bsp_Range_DisableAll();
+        s_state = APP_STATE_RANGE_RELEASE_WAIT;
+        s_state_started_ms = Com_Time_GetMs();
+        return;
+    }
+
     s_measurement_valid = ENABLE;
 }
 

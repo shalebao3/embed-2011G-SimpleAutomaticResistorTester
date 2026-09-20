@@ -297,6 +297,52 @@ static void test_read(const char *name)
 }
 
 
+static void complete_range_switch(
+    App_ResistorTesterRange expected_range,
+    uint32_t expected_rref,
+    int expected_set_event)
+{
+    App_ResistorTesterMeasurement measurement;
+
+    /* 刚进入释放等待，立即再次调度不能提前接通新档。 */
+    event_count = 0U;
+    App_ResistorTester_Task();
+    CHECK(event_count == 0U);
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    /* 超过临时 10ms 释放等待后，才允许接通目标继电器。 */
+    now_ms += 10U;
+    App_ResistorTester_Task();
+    {
+        const int expected[] = {RANGE_ALL_OFF, expected_set_event};
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+    }
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    /* 新档刚接通时仍不能立即 ADC。 */
+    event_count = 0U;
+    App_ResistorTester_Task();
+    CHECK(event_count == 0U);
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    /* 超过临时 20ms 稳定等待，只完成 active_range 提交，不在同一轮采样。 */
+    now_ms += 20U;
+    App_ResistorTester_Task();
+    CHECK(event_count == 0U);
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+
+    /* 下一轮立即使用新档重新采样。 */
+    conversion_input = 2048U;
+    event_count = 0U;
+    App_ResistorTester_Task();
+    CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
+    CHECK(measurement.adc_raw == 2048U);
+    CHECK(measurement.active_range == expected_range);
+    CHECK(measurement.recommended_range == expected_range);
+    CHECK(measurement.reference_resistor_ohm == expected_rref);
+    CHECK(measurement.resistance_ohm == expected_rref);
+}
+
 static void test_app_measurement(const char *name)
 {
     App_ResistorTesterMeasurement measurement = {
@@ -322,12 +368,10 @@ static void test_app_measurement(const char *name)
         return;
     }
 
-    if (strcmp(name, "measure_1k") == 0) { conversion_input = 3079U; }
-    if (strcmp(name, "measure_zero") == 0) { conversion_input = 0U; }
-    if (strcmp(name, "measure_recommend_lower") == 0) { conversion_input = 500U; }
-    if (strcmp(name, "measure_recommend_keep_low_boundary") == 0) { conversion_input = 819U; }
-    if (strcmp(name, "measure_recommend_keep_high_boundary") == 0) { conversion_input = 3072U; }
-    if (strcmp(name, "measure_recommend_higher") == 0) { conversion_input = 3500U; }
+    if (strcmp(name, "measure_keep_low_boundary") == 0) { conversion_input = 819U; }
+    if (strcmp(name, "measure_keep_high_boundary") == 0) { conversion_input = 3072U; }
+    if (strcmp(name, "measure_switch_lower") == 0) { conversion_input = 500U; }
+    if (strcmp(name, "measure_switch_higher") == 0) { conversion_input = 3500U; }
     if (strcmp(name, "measure_fullscale_invalid") == 0) { conversion_input = 4095U; }
     if (strcmp(name, "measure_read_error_invalid") == 0) { read_stuck = 1; }
 
@@ -345,33 +389,51 @@ static void test_app_measurement(const char *name)
         return;
     }
 
+    if (strcmp(name, "measure_switch_lower") == 0) {
+        const int expected[] = {
+            EOC_CLEAR, CONVERSION_START, CONVERSION_READ, RANGE_ALL_OFF
+        };
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+        complete_range_switch(
+            APP_RESISTOR_RANGE_100_OHM,
+            33U,
+            RANGE_SET_100);
+        return;
+    }
+
+    if (strcmp(name, "measure_switch_higher") == 0) {
+        const int expected[] = {
+            EOC_CLEAR, CONVERSION_START, CONVERSION_READ, RANGE_ALL_OFF
+        };
+        expect_events(expected, sizeof(expected) / sizeof(expected[0]));
+        CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == ERROR);
+        complete_range_switch(
+            APP_RESISTOR_RANGE_10K_OHM,
+            3300U,
+            RANGE_SET_10K);
+        return;
+    }
+
     CHECK(App_ResistorTester_GetLatestMeasurement(&measurement) == SUCCESS);
     CHECK(measurement.adc_raw == conversion_input);
     CHECK(measurement.reference_resistor_ohm == 330U);
     CHECK(measurement.active_range == APP_RESISTOR_RANGE_1K_OHM);
+    CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_1K_OHM);
 
     if (strcmp(name, "measure_midscale") == 0) {
         CHECK(measurement.resistance_ohm == 330U);
-    } else if (strcmp(name, "measure_1k") == 0) {
-        CHECK(measurement.resistance_ohm == 1000U);
-    } else if (strcmp(name, "measure_zero") == 0) {
-        CHECK(measurement.resistance_ohm == 0U);
     } else if (strcmp(name, "measure_interval") == 0) {
         const unsigned before = conversion_starts;
-        CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_1K_OHM);
         App_ResistorTester_Task();
         CHECK(conversion_starts == before);
         now_ms += 100U;
         App_ResistorTester_Task();
         CHECK(conversion_starts == before + 1U);
-    } else if (strcmp(name, "measure_recommend_lower") == 0) {
-        CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_100_OHM);
-    } else if (strcmp(name, "measure_recommend_keep_low_boundary") == 0) {
-        CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_1K_OHM);
-    } else if (strcmp(name, "measure_recommend_keep_high_boundary") == 0) {
-        CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_1K_OHM);
-    } else if (strcmp(name, "measure_recommend_higher") == 0) {
-        CHECK(measurement.recommended_range == APP_RESISTOR_RANGE_10K_OHM);
+    } else if (strcmp(name, "measure_keep_low_boundary") == 0) {
+        CHECK(measurement.adc_raw == 819U);
+    } else if (strcmp(name, "measure_keep_high_boundary") == 0) {
+        CHECK(measurement.adc_raw == 3072U);
     }
 }
 

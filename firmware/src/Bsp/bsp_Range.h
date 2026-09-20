@@ -25,8 +25,9 @@ void Bsp_Range_Init(void);
 /**
  * @brief 选择一个量程控制输出。
  * @param range 目标量程。
- * @return SUCCESS：已先关闭全部三路，再只开启目标一路；ERROR：量程参数非法。
- * @note 使用 break-before-make 顺序，禁止两路同时保持有效。
+ * @return SUCCESS：GPIO 层已先关闭全部三路，再只开启目标一路；ERROR：量程参数非法。
+ * @note 本函数只保证 GPIO 不同时保持多路高电平。
+ *       机械继电器真正的释放等待由 App 状态机在调用本函数之前完成。
  */
 ErrorStatus Bsp_Range_Select(Bsp_Range range);
 
