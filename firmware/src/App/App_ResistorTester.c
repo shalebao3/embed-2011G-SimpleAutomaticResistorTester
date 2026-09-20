@@ -219,13 +219,12 @@ static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
 {
     Bsp_Range bsp_range;
 
-    if (s_state == APP_STATE_FAULT)
+    switch (s_state)
     {
+    case APP_STATE_FAULT:
         return ENABLE;
-    }
 
-    if (s_state == APP_STATE_RANGE_RELEASE_WAIT)
-    {
+    case APP_STATE_RANGE_RELEASE_WAIT:
         if ((uint32_t)(now_ms - s_state_started_ms) < APP_RANGE_RELEASE_WAIT_MS)
         {
             return ENABLE;
@@ -243,10 +242,8 @@ static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
         s_state = APP_STATE_RANGE_SETTLE_WAIT;
         s_state_started_ms = Com_Time_GetMs();
         return ENABLE;
-    }
 
-    if (s_state == APP_STATE_RANGE_SETTLE_WAIT)
-    {
+    case APP_STATE_RANGE_SETTLE_WAIT:
         if ((uint32_t)(now_ms - s_state_started_ms) < APP_RANGE_SETTLE_WAIT_MS)
         {
             return ENABLE;
@@ -262,9 +259,12 @@ static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
         s_sample_started = DISABLE;
         s_state = APP_STATE_MEASURE;
         return ENABLE;
-    }
 
-    return DISABLE;
+    case APP_STATE_MEASURE:
+    default:
+        /* 测量态不由换档状态机处理，交回给调用方继续测量。 */
+        return DISABLE;
+    }
 }
 
 /**
