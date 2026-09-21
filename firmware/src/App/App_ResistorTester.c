@@ -269,7 +269,7 @@ static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
             return ENABLE;
         }
 
-        s_state = APP_STATE_RANGE_SETTLE_WAIT;
+        s_state = APP_STATE_RANGE_SETTLE_WAIT;  // 状态转移
         s_state_started_ms = Com_Time_GetMs();
         return ENABLE;
 
@@ -288,7 +288,7 @@ static FunctionalState App_ResistorTester_ProcessRangeState(uint32_t now_ms)
         s_latest_measurement.recommended_range = s_active_range;
         s_latest_measurement.status = APP_MEASUREMENT_STATUS_UNAVAILABLE;
         s_sample_started = DISABLE;
-        s_state = APP_STATE_MEASURE;
+        s_state = APP_STATE_MEASURE;  // 状态转移
         return ENABLE;
 
     case APP_STATE_MEASURE:
